@@ -15,11 +15,11 @@ class AddOrderItemRequest extends FormRequest
     {
         return [
             'item_name' => 'required|string|max:255',
-            'weight' => 'required|string|max:50',
+            'weight' => 'nullable|string|max:50',
             'price' => 'required|numeric|min:0.01',
-            'quantity' => 'sometimes|integer|min:1',
-            'special_notes' => 'sometimes|string|max:1000',
-            'store_link' => 'nullable|string|url',
+            'quantity' => 'required|integer|min:1',
+            'special_notes' => 'nullable|string|max:1000',
+            'store_link' => 'nullable|string|max:500',
             'product_images' => 'sometimes|array',
             'product_images.*' => 'image|max:10240', // 10MB max
         ];
@@ -37,15 +37,15 @@ class AddOrderItemRequest extends FormRequest
     {
         return [
             'item_name.required' => 'Item name is required',
-            'weight.required' => 'Weight is required',
             'price.required' => 'Price is required',
             'price.numeric' => 'Price must be a number',
             'price.min' => 'Price must be greater than 0',
+            'quantity.required' => 'Quantity is required',
             'quantity.integer' => 'Quantity must be an integer',
             'quantity.min' => 'Quantity must be at least 1',
-            'store_link.url' => 'Store link must be a valid URL',
+            'store_link.max' => 'Store link must not exceed 500 characters',
             'product_images.array' => 'Product images must be an array',
-            'product_images.*.url' => 'Each product image must be a valid URL',
+            'product_images.*.image' => 'Each product image must be a valid image',
         ];
     }
 }
