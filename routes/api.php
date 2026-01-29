@@ -153,3 +153,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('dashboard/picker', [\App\Http\Controllers\Api\OrderDiscoveryController::class, 'getPickerDashboard']);
     Route::get('dashboard/orderer', [\App\Http\Controllers\Api\OrderDiscoveryController::class, 'getOrdererDashboard']);
 });
+
+// Locations (Countries & Cities)
+Route::get('locations/countries', [\App\Http\Controllers\Api\LocationController::class, 'getCountries']);
+Route::get('locations/cities/{countryCode}', [\App\Http\Controllers\Api\LocationController::class, 'getCities']);
