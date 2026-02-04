@@ -156,4 +156,4 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Locations (Countries & Cities)
 Route::get('locations/countries', [\App\Http\Controllers\Api\LocationController::class, 'getCountries']);
-Route::get('locations/cities/{countryCode}', [\App\Http\Controllers\Api\LocationController::class, 'getCities']);
+Route::post('locations/cities', [\App\Http\Controllers\Api\LocationController::class, 'getCities']);
