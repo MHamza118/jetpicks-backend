@@ -150,6 +150,18 @@ class SearchService
                 'rating' => $this->getUserRating($picker->id),
                 'completed_orders' => $completedOrders,
                 'journeys_count' => $picker->travelJourneys->count(),
+                'travelJourneys' => $picker->travelJourneys->map(function ($journey) {
+                    return [
+                        'id' => $journey->id,
+                        'departure_country' => $journey->departure_country,
+                        'departure_city' => $journey->departure_city,
+                        'departure_date' => $journey->departure_date,
+                        'arrival_country' => $journey->arrival_country,
+                        'arrival_city' => $journey->arrival_city,
+                        'arrival_date' => $journey->arrival_date,
+                        'luggage_weight_capacity' => $journey->luggage_weight_capacity,
+                    ];
+                })->toArray(),
             ];
         })->toArray();
     }
