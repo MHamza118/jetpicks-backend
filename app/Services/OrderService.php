@@ -162,6 +162,7 @@ class OrderService
                 'id' => $order->picker->id,
                 'full_name' => $order->picker->full_name,
                 'avatar_url' => $order->picker->avatar_url,
+                'rating' => $this->getUserRating($order->picker->id),
             ] : null,
             'offers' => $order->offers->map(fn($offer) => [
                 'id' => $offer->id,
