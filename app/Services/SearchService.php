@@ -22,21 +22,22 @@ class SearchService
     public function searchOrders(string $query, array $filters = [], int $page = 1, int $limit = 20): array
     {
         $searchTerm = "%{$query}%";
+        $lowerSearchTerm = strtolower($query);
 
         $orders = Order::where('status', 'PENDING')
             ->whereDoesntHave('picker')
             ->with(['orderer', 'items', 'offers'])
-            ->where(function ($q) use ($searchTerm) {
-                $q->whereHas('orderer', function ($sub) use ($searchTerm) {
-                    $sub->where('full_name', 'LIKE', $searchTerm);
+            ->where(function ($q) use ($lowerSearchTerm) {
+                $q->whereHas('orderer', function ($sub) use ($lowerSearchTerm) {
+                    $sub->whereRaw('LOWER(full_name) LIKE ?', ["%{$lowerSearchTerm}%"]);
                 })
-                ->orWhereHas('items', function ($sub) use ($searchTerm) {
-                    $sub->where('item_name', 'LIKE', $searchTerm);
+                ->orWhereHas('items', function ($sub) use ($lowerSearchTerm) {
+                    $sub->whereRaw('LOWER(item_name) LIKE ?', ["%{$lowerSearchTerm}%"]);
                 })
-                ->orWhere('origin_city', 'LIKE', $searchTerm)
-                ->orWhere('destination_city', 'LIKE', $searchTerm)
-                ->orWhere('origin_country', 'LIKE', $searchTerm)
-                ->orWhere('destination_country', 'LIKE', $searchTerm);
+                ->orWhereRaw('LOWER(origin_city) LIKE ?', ["%{$lowerSearchTerm}%"])
+                ->orWhereRaw('LOWER(destination_city) LIKE ?', ["%{$lowerSearchTerm}%"])
+                ->orWhereRaw('LOWER(origin_country) LIKE ?', ["%{$lowerSearchTerm}%"])
+                ->orWhereRaw('LOWER(destination_country) LIKE ?', ["%{$lowerSearchTerm}%"]);
             });
 
         if (isset($filters['status'])) {
@@ -59,20 +60,40 @@ class SearchService
     public function searchPickers(string $query, array $filters = [], int $page = 1, int $limit = 20): array
     {
         $searchTerm = "%{$query}%";
+        $lowerSearchTerm = strtolower($query);
 
-        $pickers = User::where('full_name', 'LIKE', $searchTerm)
-            ->orWhere('email', 'LIKE', $searchTerm)
-            ->with('travelJourneys')
-            ->whereHas('travelJourneys', function ($q) use ($filters) {
-                if (isset($filters['origin_city'])) {
-                    $q->where('departure_city', 'LIKE', "%{$filters['origin_city']}%");
-                }
-                if (isset($filters['destination_city'])) {
-                    $q->where('arrival_city', 'LIKE', "%{$filters['destination_city']}%");
-                }
+        $pickers = User::with('travelJourneys')
+            ->where(function ($q) use ($searchTerm, $lowerSearchTerm) {
+                // Search by picker name or email (case-insensitive)
+                $q->whereRaw('LOWER(full_name) LIKE ?', ["%{$lowerSearchTerm}%"])
+                  ->orWhereRaw('LOWER(email) LIKE ?', ["%{$lowerSearchTerm}%"]);
+            })
+            ->orWhere(function ($q) use ($lowerSearchTerm) {
+                // Search by travel journey cities and countries (case-insensitive)
+                $q->whereHas('travelJourneys', function ($sub) use ($lowerSearchTerm) {
+                    $sub->whereRaw('LOWER(departure_city) LIKE ?', ["%{$lowerSearchTerm}%"])
+                        ->orWhereRaw('LOWER(departure_country) LIKE ?', ["%{$lowerSearchTerm}%"])
+                        ->orWhereRaw('LOWER(arrival_city) LIKE ?', ["%{$lowerSearchTerm}%"])
+                        ->orWhereRaw('LOWER(arrival_country) LIKE ?', ["%{$lowerSearchTerm}%"]);
+                });
+            })
+            ->with('travelJourneys');
+
+        // Apply additional filters if provided
+        if (isset($filters['origin_city'])) {
+            $originCityLower = strtolower($filters['origin_city']);
+            $pickers->whereHas('travelJourneys', function ($q) use ($originCityLower) {
+                $q->whereRaw('LOWER(departure_city) LIKE ?', ["%{$originCityLower}%"]);
             });
+        }
+        if (isset($filters['destination_city'])) {
+            $destinationCityLower = strtolower($filters['destination_city']);
+            $pickers->whereHas('travelJourneys', function ($q) use ($destinationCityLower) {
+                $q->whereRaw('LOWER(arrival_city) LIKE ?', ["%{$destinationCityLower}%"]);
+            });
+        }
 
-        $pickers = $pickers->paginate($limit, ['*'], 'page', $page);
+        $pickers = $pickers->distinct()->paginate($limit, ['*'], 'page', $page);
 
         return $this->formatPagination($pickers, $this->formatPicker($pickers));
     }
