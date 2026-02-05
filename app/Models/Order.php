@@ -24,6 +24,7 @@ class Order extends Model
         'destination_city',
         'special_notes',
         'reward_amount',
+        'accepted_counter_offer_amount',
         'currency',
         'status',
         'delivered_at',
@@ -35,6 +36,7 @@ class Order extends Model
 
     protected $casts = [
         'reward_amount' => 'decimal:2',
+        'accepted_counter_offer_amount' => 'decimal:2',
         'delivery_issue_reported' => 'boolean',
         'auto_confirmed' => 'boolean',
         'delivered_at' => 'datetime',

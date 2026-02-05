@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Offer;
 use App\Models\Order;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
 class OfferService
@@ -33,6 +34,17 @@ class OfferService
             throw new \Exception('Order not found');
         }
 
+        // Check if picker already sent a counter offer for this order
+        $existingCounterOffer = Offer::where('order_id', $orderId)
+            ->where('offered_by_user_id', $pickerId)
+            ->where('offer_type', 'COUNTER')
+            ->whereIn('status', ['PENDING', 'ACCEPTED'])
+            ->first();
+
+        if ($existingCounterOffer) {
+            throw new \Exception('You have already sent a counter offer for this order. Wait for the orderer to respond.');
+        }
+
         if (!$parentOfferId) {
             $latestOffer = Offer::where('order_id', $orderId)
                 ->orderBy('created_at', 'desc')
@@ -50,27 +62,46 @@ class OfferService
         ]);
 
         // Create notification for orderer
-        $picker = $counterOffer->offeredBy;
-        $this->notificationService->create(
-            $order->orderer_id,
-            'COUNTER_OFFER_RECEIVED',
-            'Counter Offer Received',
-            "{$picker->full_name} sent you a counter offer for \${$offerAmount}",
-            $counterOffer->id,
-            ['order_id' => $orderId, 'offer_id' => $counterOffer->id, 'amount' => $offerAmount, 'picker_name' => $picker->full_name]
-        );
+        $picker = User::find($pickerId);
+        if ($picker) {
+            $this->notificationService->create(
+                $order->orderer_id,
+                'COUNTER_OFFER_RECEIVED',
+                'Counter Offer Received',
+                "{$picker->full_name} sent you a counter offer for \${$offerAmount}",
+                $counterOffer->id,
+                ['order_id' => $orderId, 'offer_id' => $counterOffer->id, 'amount' => $offerAmount, 'picker_name' => $picker->full_name]
+            );
+        }
 
         return $counterOffer;
     }
 
     public function acceptOffer(string $offerId, string $userId): array
     {
-        $offer = Offer::find($offerId);
+        \Log::info('OfferService::acceptOffer start', ['offerId' => $offerId, 'userId' => $userId]);
+        
+        $offer = Offer::with(['order', 'order.orderer'])->find($offerId);
+        \Log::info('Offer found', ['offer' => $offer ? 'yes' : 'no']);
+        
         if (!$offer) {
             throw new \Exception('Offer not found');
         }
 
         $order = $offer->order;
+        \Log::info('Order found', ['order' => $order ? 'yes' : 'no', 'order_id' => $order?->id]);
+        
+        if (!$order) {
+            throw new \Exception('Order not found');
+        }
+
+        \Log::info('Checking permissions', [
+            'offer_type' => $offer->offer_type,
+            'order_orderer_id' => $order->orderer_id,
+            'user_id' => $userId,
+            'match' => $order->orderer_id === $userId
+        ]);
+
         if ($offer->offer_type === 'INITIAL' && $order->orderer_id !== $userId) {
             throw new \Exception('Only orderer can accept initial offer');
         }
@@ -79,47 +110,58 @@ class OfferService
         }
 
         $offer->update(['status' => 'ACCEPTED']);
+        \Log::info('Offer status updated to ACCEPTED');
 
         if ($offer->parent_offer_id) {
             Offer::where('id', $offer->parent_offer_id)
                 ->orWhere('parent_offer_id', $offer->parent_offer_id)
                 ->where('id', '!=', $offerId)
                 ->update(['status' => 'SUPERSEDED']);
+            \Log::info('Parent offers marked as SUPERSEDED');
         }
 
         Offer::where('order_id', $order->id)
             ->where('id', '!=', $offerId)
             ->where('status', 'PENDING')
             ->update(['status' => 'SUPERSEDED']);
+        \Log::info('Other pending offers marked as SUPERSEDED');
 
-        $order->update([
-            'assigned_picker_id' => $offer->offered_by_user_id,
-            'status' => 'ACCEPTED',
-            'reward_amount' => $offer->offer_amount,
-        ]);
+        // For COUNTER offers, store the accepted amount separately
+        // Do NOT change order status or assign picker
+        if ($offer->offer_type === 'COUNTER') {
+            \Log::info('Processing COUNTER offer', ['amount' => $offer->offer_amount]);
+            
+            $order->accepted_counter_offer_amount = $offer->offer_amount;
+            $order->save();
+            \Log::info('Order saved with accepted_counter_offer_amount', ['value' => $order->accepted_counter_offer_amount]);
 
-        $chatService = app(ChatService::class);
-        $chatRoom = $chatService->createChatRoom(
-            $order->id,
-            $order->orderer_id,
-            $offer->offered_by_user_id
-        );
+            // Create notification for picker
+            $orderer = $order->orderer;
+            \Log::info('Orderer loaded', ['orderer' => $orderer ? 'yes' : 'no']);
+            
+            if ($orderer) {
+                \Log::info('Creating notification for picker', ['picker_id' => $offer->offered_by_user_id]);
+                $this->notificationService->create(
+                    $offer->offered_by_user_id,
+                    'COUNTER_OFFER_ACCEPTED',
+                    'Counter Offer Accepted',
+                    "{$orderer->full_name} has accepted your counter offer of \${$offer->offer_amount}",
+                    $order->id,
+                    ['order_id' => $order->id, 'offer_id' => $offerId, 'amount' => $offer->offer_amount]
+                );
+            }
+        }
 
-        // Create notification for picker
-        $orderer = $order->orderer;
-        $this->notificationService->create(
-            $offer->offered_by_user_id,
-            'ORDER_ACCEPTED',
-            'Order Accepted',
-            "{$orderer->full_name} has accepted your offer",
-            $order->id,
-            ['order_id' => $order->id, 'offer_id' => $offerId, 'picker_name' => $orderer->full_name]
-        );
-
+        \Log::info('OfferService::acceptOffer complete');
+        
+        // Refresh order to get latest data from database
+        $order = $order->fresh();
+        \Log::info('Order refreshed', ['accepted_counter_offer_amount' => $order->accepted_counter_offer_amount]);
+        
         return [
             'offer' => $offer,
-            'order' => $order->fresh(),
-            'chat_room' => $chatRoom,
+            'order' => $order,
+            'chat_room' => null,
         ];
     }
 

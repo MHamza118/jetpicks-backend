@@ -46,11 +46,15 @@ class OfferController extends Controller
         }
     }
 
-    //accept offer (picker accepting orderer's offer)
     public function accept(Request $request, string $offerId): JsonResponse
     {
         try {
+            \Log::info('accept called', ['offerId' => $offerId, 'userId' => $request->user()->id]);
+            
             $result = $this->offerService->acceptOffer($offerId, $request->user()->id);
+            
+            \Log::info('accept success', ['result' => $result]);
+            
             return response()->json([
                 'message' => 'Offer accepted successfully',
                 'data' => [
@@ -63,14 +67,12 @@ class OfferController extends Controller
                         'assigned_picker_id' => $result['order']->assigned_picker_id,
                         'status' => $result['order']->status,
                         'reward_amount' => $result['order']->reward_amount,
-                    ],
-                    'chat_room' => [
-                        'id' => $result['chat_room']->id,
-                        'order_id' => $result['chat_room']->order_id,
+                        'accepted_counter_offer_amount' => $result['order']->accepted_counter_offer_amount,
                     ],
                 ],
             ], 200);
         } catch (\Exception $e) {
+            \Log::error('accept error', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return response()->json([
                 'message' => $e->getMessage(),
             ], 400);
