@@ -212,8 +212,12 @@ class OrderService
 
     public function getPickerOrders(string $pickerId, ?string $status = null, int $page = 1, int $limit = 20): array
     {
-        $query = Order::where('assigned_picker_id', $pickerId)
-            ->with(['items', 'orderer', 'offers']);
+        $query = Order::where(function ($q) use ($pickerId) {
+            // Include orders assigned to this picker OR PENDING orders (available to all pickers)
+            $q->where('assigned_picker_id', $pickerId)
+              ->orWhere('status', 'PENDING');
+        })
+        ->with(['items', 'orderer', 'offers']);
 
         if ($status) {
             $query->where('status', $status);
