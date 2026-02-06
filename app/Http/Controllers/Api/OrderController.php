@@ -77,6 +77,19 @@ class OrderController extends Controller
         ]);
     }
 
+    public function finalize(Order $order): JsonResponse
+    {
+        $finalized = $this->orderService->finalizeOrder($order->id);
+
+        return response()->json([
+            'message' => 'Order finalized successfully',
+            'data' => [
+                'id' => $finalized->id,
+                'status' => $finalized->status,
+            ],
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $status = $request->query('status');

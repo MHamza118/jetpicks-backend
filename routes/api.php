@@ -61,6 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('orders/{order}', [\App\Http\Controllers\Api\OrderController::class, 'show']);
     Route::post('orders/{order}/items', [\App\Http\Controllers\Api\OrderController::class, 'storeItems']);
     Route::put('orders/{order}/reward', [\App\Http\Controllers\Api\OrderController::class, 'setReward']);
+    Route::put('orders/{order}/finalize', [\App\Http\Controllers\Api\OrderController::class, 'finalize']);
     Route::put('orders/{order}/accept', [\App\Http\Controllers\Api\OrderController::class, 'acceptDelivery']);
     Route::delete('orders/{order}', [\App\Http\Controllers\Api\OrderController::class, 'destroy']);
 });

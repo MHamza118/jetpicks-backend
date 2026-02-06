@@ -22,7 +22,7 @@ return new class extends Migration
             $table->decimal('reward_amount', 10, 2)->comment('From Step 3: Enter Delivery Reward. Initial offer price.');
             $table->string('currency', 3)->default('USD');
             
-            $table->enum('status', ['PENDING', 'ACCEPTED', 'DELIVERED', 'COMPLETED', 'CANCELLED'])->default('PENDING')->comment("PENDING (Open), ACCEPTED (Picker assigned), DELIVERED (Marked by picker), COMPLETED (Confirmed by Orderer), CANCELLED.");
+            $table->enum('status', ['DRAFT', 'PENDING', 'ACCEPTED', 'DELIVERED', 'COMPLETED', 'CANCELLED'])->default('DRAFT')->comment("DRAFT (Being created), PENDING (Open), ACCEPTED (Picker assigned), DELIVERED (Marked by picker), COMPLETED (Confirmed by Orderer), CANCELLED.");
             
             $table->timestamp('delivered_at')->nullable()->comment("When picker marked as delivered. Starts 48h timer.");
             $table->timestamp('delivery_confirmed_at')->nullable()->comment("When orderer confirmed delivery or auto-confirmed.");

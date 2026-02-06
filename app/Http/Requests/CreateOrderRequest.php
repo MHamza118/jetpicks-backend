@@ -20,6 +20,7 @@ class CreateOrderRequest extends FormRequest
             'destination_city' => 'required|string|max:100',
             'special_notes' => 'sometimes|string|max:1000',
             'picker_id' => 'sometimes|string|exists:users,id',
+            'status' => 'sometimes|in:DRAFT,PENDING',
         ];
     }
 

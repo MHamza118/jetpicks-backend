@@ -26,7 +26,7 @@ class OrderService
             'destination_city' => $data['destination_city'],
             'special_notes' => $data['special_notes'] ?? null,
             'reward_amount' => 0,
-            'status' => 'PENDING',
+            'status' => $data['status'] ?? 'DRAFT',
         ]);
 
         return $order;
@@ -69,6 +69,17 @@ class OrderService
             'offered_by_user_id' => $order->orderer_id,
             'offer_type' => 'INITIAL',
             'offer_amount' => $rewardAmount,
+            'status' => 'PENDING',
+        ]);
+
+        return $order;
+    }
+
+    public function finalizeOrder(string $orderId): Order
+    {
+        $order = Order::findOrFail($orderId);
+        
+        $order->update([
             'status' => 'PENDING',
         ]);
 
@@ -215,9 +226,13 @@ class OrderService
     {
         $query = Order::where(function ($q) use ($pickerId) {
             // Include orders assigned to this picker OR PENDING orders (available to all pickers)
+            // Exclude DRAFT orders (they're not visible to pickers yet)
             $q->where('assigned_picker_id', $pickerId)
-              ->orWhere('status', 'PENDING');
+              ->orWhere(function ($q2) {
+                  $q2->where('status', 'PENDING');
+              });
         })
+        ->where('status', '!=', 'DRAFT')
         ->with(['items', 'orderer', 'offers']);
 
         if ($status) {
