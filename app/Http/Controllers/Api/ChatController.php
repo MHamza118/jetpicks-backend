@@ -123,9 +123,15 @@ class ChatController extends Controller
             }
 
             // Check if chat room already exists between this orderer and picker
+            // Handle both directions: orderer->picker and picker->orderer
             $existingRoom = ChatRoom::where(function ($query) use ($userId, $pickerId) {
-                $query->where('orderer_id', $userId)
+                $query->where(function ($q) use ($userId, $pickerId) {
+                    $q->where('orderer_id', $userId)
                       ->where('picker_id', $pickerId);
+                })->orWhere(function ($q) use ($userId, $pickerId) {
+                    $q->where('orderer_id', $pickerId)
+                      ->where('picker_id', $userId);
+                });
             })->first();
             
             if ($existingRoom) {

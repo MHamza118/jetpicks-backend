@@ -107,6 +107,7 @@ class OrderService
             
             return [
                 'id' => $order->id,
+                'picker_id' => $order->assigned_picker_id,
                 'origin_city' => $order->origin_city,
                 'destination_city' => $order->destination_city,
                 'status' => $order->status,
