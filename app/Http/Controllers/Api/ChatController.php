@@ -122,18 +122,13 @@ class ChatController extends Controller
                 ], 400);
             }
 
-            // Check if chat room already exists for this order
-            $existingRoom = ChatRoom::where('order_id', $orderId)->first();
+            // Check if chat room already exists between this orderer and picker
+            $existingRoom = ChatRoom::where(function ($query) use ($userId, $pickerId) {
+                $query->where('orderer_id', $userId)
+                      ->where('picker_id', $pickerId);
+            })->first();
             
             if ($existingRoom) {
-                // Verify user is part of this chat room
-                if ($existingRoom->orderer_id !== $userId && $existingRoom->picker_id !== $userId) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Unauthorized'
-                    ], 403);
-                }
-                
                 return response()->json([
                     'success' => true,
                     'chatRoomId' => $existingRoom->id,
