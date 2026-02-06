@@ -21,7 +21,7 @@ class AddOrderItemRequest extends FormRequest
             'special_notes' => 'nullable|string|max:1000',
             'store_link' => 'nullable|string|max:500',
             'product_images' => 'sometimes|array',
-            'product_images.*' => 'image|max:10240', // 10MB max
+            'product_images.*' => 'image|max:5120', // 5MB max
         ];
     }
 
