@@ -115,6 +115,23 @@ class OrderController extends Controller
         ]);
     }
 
+    public function update(Order $order, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'waiting_days' => 'nullable|integer|min:1',
+        ]);
+
+        $order->update($validated);
+
+        return response()->json([
+            'message' => 'Order updated successfully',
+            'data' => [
+                'id' => $order->id,
+                'waiting_days' => $order->waiting_days,
+            ],
+        ]);
+    }
+
     public function destroy(Order $order): JsonResponse
     {
         $cancelled = $this->orderService->cancelOrder($order->id);

@@ -21,6 +21,7 @@ return new class extends Migration
             $table->text('special_notes')->nullable()->comment('From Step 1: Special Notes (Optional)');
             $table->decimal('reward_amount', 10, 2)->comment('From Step 3: Enter Delivery Reward. Initial offer price.');
             $table->string('currency', 3)->default('USD');
+            $table->integer('waiting_days')->nullable()->comment('From Step 2: How long can you wait for your items in days');
             
             $table->enum('status', ['DRAFT', 'PENDING', 'ACCEPTED', 'DELIVERED', 'COMPLETED', 'CANCELLED'])->default('DRAFT')->comment("DRAFT (Being created), PENDING (Open), ACCEPTED (Picker assigned), DELIVERED (Marked by picker), COMPLETED (Confirmed by Orderer), CANCELLED.");
             

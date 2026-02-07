@@ -32,6 +32,7 @@ class Order extends Model
         'delivery_issue_reported',
         'auto_confirmed',
         'accepted_at',
+        'waiting_days',
     ];
 
     protected $casts = [

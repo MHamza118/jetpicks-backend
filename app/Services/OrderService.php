@@ -27,6 +27,7 @@ class OrderService
             'special_notes' => $data['special_notes'] ?? null,
             'reward_amount' => 0,
             'status' => $data['status'] ?? 'DRAFT',
+            'waiting_days' => $data['waiting_days'] ?? null,
         ]);
 
         return $order;
@@ -152,6 +153,7 @@ class OrderService
             'special_notes' => $order->special_notes,
             'reward_amount' => $order->reward_amount,
             'accepted_counter_offer_amount' => $order->accepted_counter_offer_amount,
+            'waiting_days' => $order->waiting_days,
             'status' => $order->status,
             'items_count' => $order->items->count(),
             'items_cost' => $itemsCost,
