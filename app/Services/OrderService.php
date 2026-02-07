@@ -17,6 +17,9 @@ class OrderService
     }
     public function createOrder(string $ordererId, array $data): Order
     {
+        // If picker_id is provided, order should be ACCEPTED, otherwise DRAFT
+        $status = isset($data['picker_id']) && $data['picker_id'] ? 'ACCEPTED' : ($data['status'] ?? 'DRAFT');
+        
         $order = Order::create([
             'orderer_id' => $ordererId,
             'assigned_picker_id' => $data['picker_id'] ?? null,
@@ -26,8 +29,9 @@ class OrderService
             'destination_city' => $data['destination_city'],
             'special_notes' => $data['special_notes'] ?? null,
             'reward_amount' => 0,
-            'status' => $data['status'] ?? 'DRAFT',
+            'status' => $status,
             'waiting_days' => $data['waiting_days'] ?? null,
+            'accepted_at' => isset($data['picker_id']) && $data['picker_id'] ? now() : null,
         ]);
 
         return $order;
@@ -80,9 +84,13 @@ class OrderService
     {
         $order = Order::findOrFail($orderId);
         
-        $order->update([
-            'status' => 'PENDING',
-        ]);
+        // Only change status to PENDING if it's currently DRAFT
+        // If it's already ACCEPTED (from select jetpicker flow), keep it as ACCEPTED
+        if ($order->status === 'DRAFT') {
+            $order->update([
+                'status' => 'PENDING',
+            ]);
+        }
 
         return $order;
     }
@@ -228,11 +236,10 @@ class OrderService
     public function getPickerOrders(string $pickerId, ?string $status = null, int $page = 1, int $limit = 20): array
     {
         $query = Order::where(function ($q) use ($pickerId) {
-            // Include orders assigned to this picker OR PENDING orders OR CANCELLED orders
-            // Exclude DRAFT orders (they're not visible to pickers yet)
+            // Include orders assigned to this picker (ACCEPTED, DELIVERED, etc.)
+            // OR PENDING orders (available for all pickers to accept)
             $q->where('assigned_picker_id', $pickerId)
-              ->orWhere('status', 'PENDING')
-              ->orWhere('status', 'CANCELLED');
+              ->orWhere('status', 'PENDING');
         })
         ->where('status', '!=', 'DRAFT')
         ->with(['items', 'orderer', 'offers']);
