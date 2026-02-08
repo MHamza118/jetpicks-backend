@@ -132,9 +132,9 @@ class OrderController extends Controller
         ]);
     }
 
-    public function destroy(Order $order): JsonResponse
+    public function destroy(Order $order, Request $request): JsonResponse
     {
-        $cancelled = $this->orderService->cancelOrder($order->id);
+        $cancelled = $this->orderService->cancelOrder($order->id, $request->user()->id);
 
         return response()->json([
             'message' => 'Order cancelled successfully',

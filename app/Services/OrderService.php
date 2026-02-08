@@ -107,7 +107,8 @@ class OrderService
         $total = $query->count();
         $offset = ($page - 1) * $limit;
 
-        $orders = $query->offset($offset)
+        $orders = $query->orderBy('created_at', 'desc')
+            ->offset($offset)
             ->limit($limit)
             ->get();
 
@@ -198,11 +199,12 @@ class OrderService
         ];
     }
 
-    public function cancelOrder(string $orderId): Order
+    public function cancelOrder(string $orderId, string $pickerId): Order
     {
         $order = Order::findOrFail($orderId);
         
         $order->update([
+            'assigned_picker_id' => $order->assigned_picker_id ?? $pickerId,
             'status' => 'CANCELLED',
         ]);
 
@@ -235,26 +237,29 @@ class OrderService
 
     public function getPickerOrders(string $pickerId, ?string $status = null, int $page = 1, int $limit = 20): array
     {
-        $query = Order::where(function ($q) use ($pickerId) {
-            // Include orders assigned to this picker (ACCEPTED, DELIVERED, etc.)
-            // OR PENDING orders (available for all pickers to accept)
-            $q->where('assigned_picker_id', $pickerId)
-              ->orWhere('status', 'PENDING');
-        })
-        ->where('status', '!=', 'DRAFT')
-        ->with(['items', 'orderer', 'offers']);
+        $query = Order::where('status', '!=', 'DRAFT')
+            ->with(['items', 'orderer', 'offers']);
 
+        // Build the picker assignment condition
+        // Include: orders assigned to this picker, PENDING orders, or CANCELLED orders assigned to this picker
+        $query->where(function ($q) use ($pickerId) {
+            $q->where('assigned_picker_id', $pickerId)  // Orders assigned to this picker (any status)
+              ->orWhere('status', 'PENDING');            // PENDING orders (available for all pickers)
+        });
+
+        // If a specific status is requested, apply additional filter
         if ($status) {
             $query->where('status', $status);
         }
 
-        $total = $query->count();
         $offset = ($page - 1) * $limit;
 
         $orders = $query->orderBy('created_at', 'desc')
             ->offset($offset)
             ->limit($limit)
             ->get();
+
+        $total = $query->count();
 
         $formattedOrders = $orders->map(function ($order) {
             $itemsCost = $order->items->sum(fn($item) => $item->price * $item->quantity);
