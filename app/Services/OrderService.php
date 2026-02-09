@@ -10,10 +10,14 @@ use Illuminate\Pagination\Paginator;
 class OrderService
 {
     protected NotificationService $notificationService;
+    protected OrderNotificationService $orderNotificationService;
 
-    public function __construct(NotificationService $notificationService)
-    {
+    public function __construct(
+        NotificationService $notificationService,
+        OrderNotificationService $orderNotificationService
+    ) {
         $this->notificationService = $notificationService;
+        $this->orderNotificationService = $orderNotificationService;
     }
     public function createOrder(string $ordererId, array $data): Order
     {
@@ -82,7 +86,7 @@ class OrderService
 
     public function finalizeOrder(string $orderId): Order
     {
-        $order = Order::findOrFail($orderId);
+        $order = Order::with('orderer')->findOrFail($orderId);
         
         // Only change status to PENDING if it's currently DRAFT
         // If it's already ACCEPTED (from select jetpicker flow), keep it as ACCEPTED
@@ -90,6 +94,9 @@ class OrderService
             $order->update([
                 'status' => 'PENDING',
             ]);
+
+            // Notify all matching pickers about the new order
+            $this->orderNotificationService->notifyPickersForNewOrder($order);
         }
 
         return $order;
@@ -221,16 +228,8 @@ class OrderService
             'accepted_at' => now(),
         ]);
 
-        // Create notification for orderer
-        $picker = $order->picker;
-        $this->notificationService->create(
-            $order->orderer_id,
-            'ORDER_ACCEPTED',
-            'Order Accepted',
-            "{$picker->full_name} has accepted your order",
-            $order->id,
-            ['order_id' => $order->id]
-        );
+        // Notify orderer that their order has been accepted
+        $this->orderNotificationService->notifyOrdererOrderAccepted($order);
 
         return $order;
     }

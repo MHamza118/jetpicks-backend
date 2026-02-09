@@ -10,10 +10,14 @@ use Illuminate\Database\Eloquent\Collection;
 class OfferService
 {
     protected NotificationService $notificationService;
+    protected OrderNotificationService $orderNotificationService;
 
-    public function __construct(NotificationService $notificationService)
-    {
+    public function __construct(
+        NotificationService $notificationService,
+        OrderNotificationService $orderNotificationService
+    ) {
         $this->notificationService = $notificationService;
+        $this->orderNotificationService = $orderNotificationService;
     }
     public function createInitialOffer(Order $order, string $ordererId, float $rewardAmount): Offer
     {
@@ -61,16 +65,14 @@ class OfferService
             'parent_offer_id' => $parentOfferId,
         ]);
 
-        // Create notification for orderer
+        // Notify orderer about counter offer
         $picker = User::find($pickerId);
         if ($picker) {
-            $this->notificationService->create(
-                $order->orderer_id,
-                'COUNTER_OFFER_RECEIVED',
-                'Counter Offer Received',
-                "{$picker->full_name} sent you a counter offer for \${$offerAmount}",
+            $this->orderNotificationService->notifyOrdererCounterOfferReceived(
+                $orderId,
                 $counterOffer->id,
-                ['order_id' => $orderId, 'offer_id' => $counterOffer->id, 'amount' => $offerAmount, 'picker_name' => $picker->full_name]
+                $offerAmount,
+                $picker->full_name
             );
         }
 
@@ -135,19 +137,17 @@ class OfferService
             $order->save();
             \Log::info('Order saved with accepted_counter_offer_amount', ['value' => $order->accepted_counter_offer_amount]);
 
-            // Create notification for picker
+            // Notify picker about counter offer acceptance
             $orderer = $order->orderer;
             \Log::info('Orderer loaded', ['orderer' => $orderer ? 'yes' : 'no']);
             
             if ($orderer) {
                 \Log::info('Creating notification for picker', ['picker_id' => $offer->offered_by_user_id]);
-                $this->notificationService->create(
-                    $offer->offered_by_user_id,
-                    'COUNTER_OFFER_ACCEPTED',
-                    'Counter Offer Accepted',
-                    "{$orderer->full_name} has accepted your counter offer of \${$offer->offer_amount}",
+                $this->orderNotificationService->notifyPickerCounterOfferAccepted(
                     $order->id,
-                    ['order_id' => $order->id, 'offer_id' => $offerId, 'amount' => $offer->offer_amount]
+                    $offerId,
+                    $offer->offer_amount,
+                    $orderer->full_name
                 );
             }
         }
