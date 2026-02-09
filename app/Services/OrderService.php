@@ -129,7 +129,9 @@ class OrderService
                 'destination_city' => $order->destination_city,
                 'status' => $order->status,
                 'items_count' => $order->items->count(),
-                'total_cost' => $itemsCost,
+                'items_cost' => $itemsCost,
+                'reward_amount' => $order->reward_amount,
+                'accepted_counter_offer_amount' => $order->accepted_counter_offer_amount,
                 'created_at' => $order->created_at,
             ];
         });
