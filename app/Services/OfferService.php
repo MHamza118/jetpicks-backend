@@ -33,6 +33,14 @@ class OfferService
 
     public function createCounterOffer(string $orderId, string $pickerId, float $offerAmount, ?string $parentOfferId = null): Offer
     {
+        \Log::info('OfferService::createCounterOffer called', [
+            'orderId' => $orderId,
+            'pickerId' => $pickerId,
+            'offerAmount' => $offerAmount,
+            'offerAmount_type' => gettype($offerAmount),
+            'parentOfferId' => $parentOfferId,
+        ]);
+
         $order = Order::find($orderId);
         if (!$order) {
             throw new \Exception('Order not found');
@@ -56,6 +64,15 @@ class OfferService
             $parentOfferId = $latestOffer?->id;
         }
 
+        \Log::info('Creating counter offer', [
+            'order_id' => $orderId,
+            'offered_by_user_id' => $pickerId,
+            'offer_type' => 'COUNTER',
+            'offer_amount' => $offerAmount,
+            'status' => 'PENDING',
+            'parent_offer_id' => $parentOfferId,
+        ]);
+
         $counterOffer = Offer::create([
             'order_id' => $orderId,
             'offered_by_user_id' => $pickerId,
@@ -63,6 +80,11 @@ class OfferService
             'offer_amount' => $offerAmount,
             'status' => 'PENDING',
             'parent_offer_id' => $parentOfferId,
+        ]);
+
+        \Log::info('Counter offer created successfully', [
+            'id' => $counterOffer->id,
+            'offer_amount' => $counterOffer->offer_amount,
         ]);
 
         // Notify orderer about counter offer

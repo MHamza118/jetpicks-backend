@@ -15,9 +15,7 @@ class OrderNotificationService
         $this->notificationService = $notificationService;
     }
 
-    /**
-     * Notify all pickers with matching travel journeys about a new order
-     */
+    // Notify all pickers with matching travel journeys about a new order
     public function notifyPickersForNewOrder(Order $order): void
     {
         // Find all pickers with active travel journeys matching this order's route
@@ -156,7 +154,7 @@ class OrderNotificationService
             $order->orderer_id,
             'COUNTER_OFFER_RECEIVED',
             'Counter Offer Received',
-            "{$pickerName} has submitted a counter offer of ${$offerAmount}",
+            "{$pickerName} has submitted a counter offer of \${$offerAmount}",
             $offerId,
             [
                 'order_id' => $orderId,

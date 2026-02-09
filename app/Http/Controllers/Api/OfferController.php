@@ -20,10 +20,17 @@ class OfferController extends Controller
     public function store(CreateOfferRequest $request): JsonResponse
     {
         try {
+            \Log::info('OfferController::store called', [
+                'order_id' => $request->input('order_id'),
+                'offer_amount' => $request->input('offer_amount'),
+                'offer_amount_type' => gettype($request->input('offer_amount')),
+                'parent_offer_id' => $request->input('parent_offer_id'),
+            ]);
+
             $offer = $this->offerService->createCounterOffer(
                 $request->input('order_id'),
                 $request->user()->id,
-                $request->input('offer_amount'),
+                (float) $request->input('offer_amount'),
                 $request->input('parent_offer_id')
             );
             return response()->json([
@@ -40,6 +47,10 @@ class OfferController extends Controller
                 ],
             ], 201);
         } catch (\Exception $e) {
+            \Log::error('OfferController::store error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'message' => $e->getMessage(),
             ], 400);
