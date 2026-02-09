@@ -11,6 +11,7 @@ class OrderDiscoveryService
     public function getAvailableOrders(string $pickerId, int $page = 1, int $limit = 20): array
     {
         $journeys = TravelJourney::where('user_id', $pickerId)
+            ->where('is_active', true)
             ->get();
 
         if ($journeys->isEmpty()) {

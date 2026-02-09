@@ -18,6 +18,7 @@ class DashboardService
     {
         $availableOrders = $this->orderDiscoveryService->getAvailableOrders($pickerId, $page, $limit);
         $journeys = TravelJourney::where('user_id', $pickerId)
+            ->where('is_active', true)
             ->orderBy('departure_date', 'asc')
             ->get()
             ->map(function ($journey) {
@@ -56,6 +57,7 @@ class DashboardService
             ->get();
 
         $query = TravelJourney::with('user')
+            ->where('is_active', true)
             ->where('arrival_date', '>=', now()->toDateString())
             ->orderBy('departure_date', 'asc');
 

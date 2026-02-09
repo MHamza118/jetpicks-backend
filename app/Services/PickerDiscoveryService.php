@@ -28,6 +28,7 @@ class PickerDiscoveryService
             ->where('departure_country', $order->origin_country)
             ->where('arrival_city', $order->destination_city)
             ->where('arrival_country', $order->destination_country)
+            ->where('is_active', true)
             ->with(['user'])
             ->whereHas('user', function ($q) {
                 $q->where(function ($subQ) {
@@ -88,6 +89,7 @@ class PickerDiscoveryService
             ->count();
 
         $travelJourneys = TravelJourney::where('user_id', $pickerId)
+            ->where('is_active', true)
             ->orderBy('departure_date', 'desc')
             ->get()
             ->map(function ($journey) {
