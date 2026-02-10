@@ -62,9 +62,13 @@ class AuthController extends Controller
     {
         $request->validate([
             'idToken' => 'required|string',
+            'role' => 'nullable|in:ORDERER,PICKER',
         ]);
 
-        $result = $this->googleAuthService->authenticateWithGoogle($request->idToken);
+        $result = $this->googleAuthService->authenticateWithGoogle(
+            $request->idToken,
+            $request->input('role')
+        );
 
         return response()->json([
             'message' => $result['isNewUser'] ? 'Account created successfully.' : 'Login successful.',

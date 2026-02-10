@@ -11,7 +11,7 @@ class GoogleAuthService
     /**
      * Verify Google access token and authenticate/register user
      */
-    public function authenticateWithGoogle(string $accessToken): array
+    public function authenticateWithGoogle(string $accessToken, ?string $role = null): array
     {
         try {
             // Verify the access token with Google's tokeninfo endpoint
@@ -27,14 +27,6 @@ class GoogleAuthService
 
             $tokenInfo = $response->json();
 
-            // Validate token belongs to our app
-            $expectedClientId = env('GOOGLE_CLIENT_ID');
-            if (($tokenInfo['aud'] ?? null) !== $expectedClientId) {
-                throw ValidationException::withMessages([
-                    'token' => ['Token does not belong to this application'],
-                ]);
-            }
-
             // Check token expiration
             $expiresIn = $tokenInfo['expires_in'] ?? 0;
             if ($expiresIn <= 0) {
@@ -44,7 +36,7 @@ class GoogleAuthService
             }
 
             // Get user info from Google
-            $userResponse = Http::timeout(10)->withToken($accessToken)->get('https://www.googleapis.com/oauth2/v1/userinfo');
+            $userResponse = Http::timeout(10)->withToken($accessToken)->get('https://www.googleapis.com/oauth2/v2/userinfo');
 
             if (!$userResponse->successful()) {
                 throw ValidationException::withMessages([
@@ -65,7 +57,6 @@ class GoogleAuthService
             $email = $userInfo['email'];
             $fullName = $userInfo['name'] ?? 'User';
             $avatarUrl = $userInfo['picture'] ?? null;
-            $googleId = $userInfo['id'] ?? null;
 
             // Check if user exists by email
             $user = User::where('email', $email)->first();
@@ -80,15 +71,16 @@ class GoogleAuthService
                 ];
             }
 
-            // User doesn't exist - create new user
+            // User doesn't exist - create new user with specified role
+            $userRole = $role && in_array($role, ['ORDERER', 'PICKER']) ? $role : 'ORDERER';
+            
             $user = User::create([
                 'full_name' => $fullName,
                 'email' => $email,
                 'phone_number' => '',
                 'password_hash' => null,
                 'avatar_url' => $avatarUrl,
-                'roles' => ['ORDERER'],
-                'email_verified_at' => now(), // Mark as verified since Google verified it
+                'roles' => [$userRole],
             ]);
 
             $token = $user->createToken('auth_token')->plainTextToken;
