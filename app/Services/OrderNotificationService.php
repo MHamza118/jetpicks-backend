@@ -72,31 +72,6 @@ class OrderNotificationService
     }
 
     /**
-     * Notify picker when order is cancelled
-     */
-    public function notifyPickerOrderCancelled(Order $order): void
-    {
-        if (!$order->assigned_picker_id) {
-            return;
-        }
-
-        $orderer = $order->orderer;
-
-        $this->notificationService->create(
-            $order->assigned_picker_id,
-            'ORDER_CANCELLED',
-            'Order Cancelled',
-            "Order from {$orderer->full_name} has been cancelled",
-            $order->id,
-            [
-                'order_id' => $order->id,
-                'orderer_id' => $orderer->id,
-                'orderer_name' => $orderer->full_name,
-            ]
-        );
-    }
-
-    /**
      * Notify orderer when order is delivered
      */
     public function notifyOrdererOrderDelivered(Order $order): void
