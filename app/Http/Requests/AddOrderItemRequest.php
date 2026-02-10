@@ -22,7 +22,7 @@ class AddOrderItemRequest extends FormRequest
             'special_notes' => 'nullable|string|max:1000',
             'store_link' => 'nullable|string|max:500',
             'product_images' => 'sometimes|array',
-            'product_images.*' => 'image|max:5120', // 5MB max
+            'product_images.*' => 'image|max:102400', // 100MB max
         ];
     }
 
@@ -46,7 +46,8 @@ class AddOrderItemRequest extends FormRequest
             'quantity.min' => 'Quantity must be at least 1',
             'store_link.max' => 'Store link must not exceed 500 characters',
             'product_images.array' => 'Product images must be an array',
-            'product_images.*.image' => 'Each product image must be a valid image',
+            'product_images.*.image' => 'Each product image must be a valid image file (JPEG, PNG, WebP, GIF, HEIC)',
+            'product_images.*.max' => 'Each product image must not exceed 100MB',
         ];
     }
 }

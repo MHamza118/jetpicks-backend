@@ -4,10 +4,12 @@ namespace App\Services;
 
 use App\Models\Order;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class DeliveryService
 {
-    public function markDelivered(Order $order, $userId): Order
+    public function markDelivered(Order $order, $userId, ?UploadedFile $proofFile = null): Order
     {
         if ($order->assigned_picker_id !== $userId) {
             throw new \Exception('Only assigned picker can mark as delivered');
@@ -17,10 +19,56 @@ class DeliveryService
             throw new \Exception('Order must be ACCEPTED to mark as delivered');
         }
 
-        $order->update([
+        $updateData = [
             'status' => 'DELIVERED',
             'delivered_at' => now(),
-        ]);
+        ];
+
+        // Handle proof of delivery file upload
+        if ($proofFile) {
+            // Validate file size (max 100MB)
+            $maxSize = 100 * 1024 * 1024; // 100MB
+            if ($proofFile->getSize() > $maxSize) {
+                throw new \Exception('File size exceeds 100MB limit');
+            }
+
+            // Validate file type - accept all common image formats and PDF
+            $allowedMimes = [
+                'image/jpeg',
+                'image/png',
+                'image/webp',
+                'image/gif',
+                'image/heic',
+                'image/heif',
+                'image/x-heic',
+                'image/x-heif',
+                'application/pdf'
+            ];
+            
+            $mimeType = $proofFile->getMimeType();
+            
+            // Also check by file extension for better compatibility
+            $fileName = strtolower($proofFile->getClientOriginalName());
+            $validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.pdf'];
+            $hasValidExtension = false;
+            
+            foreach ($validExtensions as $ext) {
+                if (str_ends_with($fileName, $ext)) {
+                    $hasValidExtension = true;
+                    break;
+                }
+            }
+            
+            if (!in_array($mimeType, $allowedMimes) && !$hasValidExtension) {
+                throw new \Exception('Invalid file type. Allowed: JPEG, PNG, WebP, GIF, HEIC, PDF');
+            }
+
+            // Store the file
+            $path = $proofFile->store('delivery-proofs', 'public');
+            $updateData['proof_of_delivery'] = $path;
+        }
+
+        $order->update($updateData);
 
         return $order;
     }

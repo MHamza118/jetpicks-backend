@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Services\DeliveryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DeliveryController extends Controller
 {
@@ -13,10 +14,11 @@ class DeliveryController extends Controller
     {
     }
 
-    public function markDelivered(Order $order): JsonResponse
+    public function markDelivered(Request $request, Order $order): JsonResponse
     {
         try {
-            $updated = $this->delivery->markDelivered($order, auth()->id());
+            $proofFile = $request->file('proof_of_delivery');
+            $updated = $this->delivery->markDelivered($order, auth()->id(), $proofFile);
 
             return response()->json([
                 'data' => [
