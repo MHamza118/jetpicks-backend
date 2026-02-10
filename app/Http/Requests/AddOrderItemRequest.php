@@ -18,6 +18,7 @@ class AddOrderItemRequest extends FormRequest
             'weight' => 'nullable|string|max:50',
             'price' => 'required|numeric|min:0.01',
             'quantity' => 'required|integer|min:1',
+            'currency' => 'nullable|string|size:3',
             'special_notes' => 'nullable|string|max:1000',
             'store_link' => 'nullable|string|max:500',
             'product_images' => 'sometimes|array',

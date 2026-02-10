@@ -22,6 +22,7 @@ class OrderItem extends Model
         'special_notes',
         'store_link',
         'product_images',
+        'currency',
     ];
 
     protected $casts = [

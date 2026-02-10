@@ -48,6 +48,8 @@ class OrderService
 
     public function addOrderItem(string $orderId, array $data): OrderItem
     {
+        \Log::info('addOrderItem called with data:', $data);
+        
         $imageUrls = [];
         if (isset($data['product_images']) && is_array($data['product_images'])) {
             foreach ($data['product_images'] as $image) {
@@ -58,16 +60,31 @@ class OrderService
             }
         }
 
-        return OrderItem::create([
+        $itemData = [
             'order_id' => $orderId,
             'item_name' => $data['item_name'],
-            'weight' => $data['weight'],
+            'weight' => $data['weight'] ?? null,
             'price' => $data['price'],
             'quantity' => $data['quantity'] ?? 1,
+            'currency' => $data['currency'] ?? null,
             'special_notes' => $data['special_notes'] ?? null,
             'store_link' => $data['store_link'] ?? null,
             'product_images' => !empty($imageUrls) ? $imageUrls : null,
-        ]);
+        ];
+        
+        \Log::info('Creating OrderItem with data:', $itemData);
+        
+        $item = OrderItem::create($itemData);
+        
+        // Always update the order's currency to match the item's currency
+        // This ensures both orders.currency and order_items.currency are always in sync
+        if ($data['currency'] ?? null) {
+            $order = Order::findOrFail($orderId);
+            $order->update(['currency' => $data['currency']]);
+            \Log::info('Updated order currency to:', ['currency' => $data['currency'], 'order_id' => $orderId]);
+        }
+        
+        return $item;
     }
 
     public function setReward(string $orderId, float $rewardAmount): Order
@@ -137,6 +154,7 @@ class OrderService
                 'items_cost' => $itemsCost,
                 'reward_amount' => $order->reward_amount,
                 'accepted_counter_offer_amount' => $order->accepted_counter_offer_amount,
+                'currency' => $order->currency,
                 'created_at' => $order->created_at,
             ];
         });
@@ -180,6 +198,7 @@ class OrderService
             'status' => $order->status,
             'items_count' => $order->items->count(),
             'items_cost' => $itemsCost,
+            'currency' => $order->currency,
             'chat_room_id' => $chatRoom?->id,
             'items' => $order->items->map(fn($item) => [
                 'id' => $item->id,
@@ -187,6 +206,7 @@ class OrderService
                 'weight' => $item->weight,
                 'price' => $item->price,
                 'quantity' => $item->quantity,
+                'currency' => $item->currency,
                 'special_notes' => $item->special_notes,
                 'store_link' => $item->store_link,
                 'product_images' => $item->product_images,
@@ -285,6 +305,7 @@ class OrderService
                 'items_count' => $order->items->count(),
                 'items_cost' => $itemsCost,
                 'reward_amount' => $order->reward_amount,
+                'currency' => $order->currency,
                 'items' => $order->items->map(fn($item) => [
                     'id' => $item->id,
                     'item_name' => $item->item_name,
