@@ -63,6 +63,15 @@ class OrderController extends Controller
         ], 201);
     }
 
+    public function deleteItems(Order $order): JsonResponse
+    {
+        $this->orderService->deleteOrderItems($order->id);
+
+        return response()->json([
+            'message' => 'Order items deleted successfully',
+        ]);
+    }
+
     public function setReward(Order $order, SetOrderRewardRequest $request): JsonResponse
     {
         $updated = $this->orderService->setReward($order->id, $request->validated()['reward_amount']);

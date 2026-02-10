@@ -41,6 +41,11 @@ class OrderService
         return $order;
     }
 
+    public function deleteOrderItems(string $orderId): void
+    {
+        OrderItem::where('order_id', $orderId)->delete();
+    }
+
     public function addOrderItem(string $orderId, array $data): OrderItem
     {
         $imageUrls = [];
