@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Services\AuthService;
+use App\Services\GoogleAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -20,10 +21,12 @@ use App\Mail\PasswordResetMail;
 class AuthController extends Controller
 {
     protected AuthService $authService;
+    protected GoogleAuthService $googleAuthService;
 
-    public function __construct(AuthService $authService)
+    public function __construct(AuthService $authService, GoogleAuthService $googleAuthService)
     {
         $this->authService = $authService;
+        $this->googleAuthService = $googleAuthService;
     }
     //for sigpup
     public function register(RegisterRequest $request): JsonResponse
@@ -50,6 +53,27 @@ class AuthController extends Controller
                 'token' => $result['token'],
             ],
         ]);
+    }
+
+    /**
+     * Google Login/Register
+     */
+    public function googleLogin(Request $request): JsonResponse
+    {
+        $request->validate([
+            'idToken' => 'required|string',
+        ]);
+
+        $result = $this->googleAuthService->authenticateWithGoogle($request->idToken);
+
+        return response()->json([
+            'message' => $result['isNewUser'] ? 'Account created successfully.' : 'Login successful.',
+            'data' => [
+                'user' => new UserResource($result['user']),
+                'token' => $result['token'],
+                'isNewUser' => $result['isNewUser'],
+            ],
+        ], $result['isNewUser'] ? 201 : 200);
     }
 
     //User Logout

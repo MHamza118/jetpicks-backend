@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\UserController;
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('google-login', [AuthController::class, 'googleLogin'])->middleware('throttle:10,1'); // 10 attempts per minute
     Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
     
