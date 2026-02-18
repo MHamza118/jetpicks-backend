@@ -128,15 +128,41 @@ class OrderController extends Controller
     {
         $validated = $request->validate([
             'waiting_days' => 'nullable|integer|min:1',
+            'special_notes' => 'nullable|string|max:500',
+            'reward_amount' => 'nullable|numeric|min:0',
+            'items' => 'nullable|array',
+            'items.*.id' => 'nullable|string',
+            'items.*.item_name' => 'nullable|string',
+            'items.*.quantity' => 'nullable|integer|min:1',
+            'items.*.weight' => 'nullable|string',
+            'items.*.price' => 'nullable|numeric|min:0',
+            'items.*.store_link' => 'nullable|string',
         ]);
 
-        $order->update($validated);
+        // Update order fields
+        $orderData = [
+            'waiting_days' => $validated['waiting_days'] ?? $order->waiting_days,
+            'special_notes' => $validated['special_notes'] ?? $order->special_notes,
+            'reward_amount' => $validated['reward_amount'] ?? $order->reward_amount,
+        ];
+        $order->update($orderData);
+
+        // Update items if provided
+        if (!empty($validated['items'])) {
+            foreach ($validated['items'] as $itemData) {
+                if (!empty($itemData['id'])) {
+                    $this->orderService->updateOrderItem($itemData['id'], $itemData);
+                }
+            }
+        }
 
         return response()->json([
             'message' => 'Order updated successfully',
             'data' => [
                 'id' => $order->id,
                 'waiting_days' => $order->waiting_days,
+                'special_notes' => $order->special_notes,
+                'reward_amount' => $order->reward_amount,
             ],
         ]);
     }

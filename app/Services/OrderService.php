@@ -87,6 +87,32 @@ class OrderService
         return $item;
     }
 
+    public function updateOrderItem(string $itemId, array $data): OrderItem
+    {
+        $item = OrderItem::findOrFail($itemId);
+        
+        $updateData = [];
+        if (isset($data['item_name'])) {
+            $updateData['item_name'] = $data['item_name'];
+        }
+        if (isset($data['quantity'])) {
+            $updateData['quantity'] = $data['quantity'];
+        }
+        if (isset($data['weight'])) {
+            $updateData['weight'] = $data['weight'];
+        }
+        if (isset($data['price'])) {
+            $updateData['price'] = $data['price'];
+        }
+        if (isset($data['store_link'])) {
+            $updateData['store_link'] = $data['store_link'];
+        }
+        
+        $item->update($updateData);
+        
+        return $item;
+    }
+
     public function setReward(string $orderId, float $rewardAmount): Order
     {
         $order = Order::findOrFail($orderId);
