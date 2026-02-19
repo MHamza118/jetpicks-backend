@@ -34,9 +34,7 @@ class OrderDiscoveryService
         $query->where(function ($q) use ($journeys) {
             foreach ($journeys as $journey) {
                 $q->orWhere(function ($subQ) use ($journey) {
-                    $subQ->whereRaw('LOWER(origin_city) = ?', [strtolower($journey->departure_city)])
-                        ->whereRaw('LOWER(origin_country) = ?', [strtolower($journey->departure_country)])
-                        ->whereRaw('LOWER(destination_city) = ?', [strtolower($journey->arrival_city)])
+                    $subQ->whereRaw('LOWER(origin_country) = ?', [strtolower($journey->departure_country)])
                         ->whereRaw('LOWER(destination_country) = ?', [strtolower($journey->arrival_country)]);
                 });
             }

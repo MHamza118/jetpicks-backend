@@ -18,11 +18,9 @@ class OrderNotificationService
     // Notify all pickers with matching travel journeys about a new order
     public function notifyPickersForNewOrder(Order $order): void
     {
-        // Find all pickers with active travel journeys matching this order's route
+        // Find all pickers with active travel journeys matching this order's route (by country only)
         $matchingJourneys = TravelJourney::where('is_active', true)
-            ->where('departure_city', $order->origin_city)
             ->where('departure_country', $order->origin_country)
-            ->where('arrival_city', $order->destination_city)
             ->where('arrival_country', $order->destination_country)
             ->with('user')
             ->get();
@@ -33,13 +31,15 @@ class OrderNotificationService
                 $journey->user_id,
                 'NEW_ORDER_AVAILABLE',
                 'New Order Available',
-                "A new order from {$order->origin_city} to {$order->destination_city} is available",
+                "A new order from {$order->origin_country} to {$order->destination_country} is available",
                 $order->id,
                 [
                     'order_id' => $order->id,
                     'orderer_name' => $order->orderer->full_name ?? 'Unknown',
                     'origin_city' => $order->origin_city,
+                    'origin_country' => $order->origin_country,
                     'destination_city' => $order->destination_city,
+                    'destination_country' => $order->destination_country,
                     'reward_amount' => $order->reward_amount,
                 ]
             );
