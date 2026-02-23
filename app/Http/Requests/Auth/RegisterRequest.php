@@ -23,4 +23,20 @@ class RegisterRequest extends FormRequest
             'roles.*' => ['string', 'in:PICKER,ORDERER'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'This email is already registered. Please use a different email or login to your existing account.',
+            'email.required' => 'Email is required.',
+            'email.email' => 'Please enter a valid email address.',
+            'full_name.required' => 'Full name is required.',
+            'phone_number.required' => 'Phone number is required.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 8 characters.',
+            'confirm_password.required' => 'Please confirm your password.',
+            'confirm_password.same' => 'Passwords do not match.',
+            'roles.required' => 'Please select at least one role.',
+        ];
+    }
 }
