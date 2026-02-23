@@ -37,7 +37,8 @@ class SearchController extends Controller
             'max_reward' => $maxReward,
         ]);
 
-        $results = $this->service->searchOrders($query, $filters, $page, $limit);
+        // SECURITY: Pass current user ID to exclude their own orders
+        $results = $this->service->searchOrders($query, $filters, $page, $limit, $request->user()->id);
 
         return response()->json($results);
     }
@@ -55,7 +56,8 @@ class SearchController extends Controller
             'destination_city' => $destinationCity,
         ]);
 
-        $results = $this->service->searchPickers($query, $filters, $page, $limit);
+        // SECURITY: Pass current user ID to exclude their own profile
+        $results = $this->service->searchPickers($query, $filters, $page, $limit, $request->user()->id);
 
         return response()->json($results);
     }

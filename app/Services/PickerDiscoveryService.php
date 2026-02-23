@@ -29,6 +29,7 @@ class PickerDiscoveryService
             ->where('arrival_city', $order->destination_city)
             ->where('arrival_country', $order->destination_country)
             ->where('is_active', true)
+            ->where('user_id', '!=', $order->orderer_id) // SECURITY: Exclude orderer's own picker profile
             ->with(['user'])
             ->whereHas('user', function ($q) {
                 $q->where(function ($subQ) {
@@ -120,7 +121,7 @@ class PickerDiscoveryService
         ];
     }
     //Search pickers by name or location
-    public function searchPickers(string $query, int $page = 1, int $limit = 20): array
+    public function searchPickers(string $query, int $page = 1, int $limit = 20, ?string $excludeUserId = null): array
     {
         $searchQuery = "%{$query}%";
 
@@ -131,8 +132,14 @@ class PickerDiscoveryService
                 $q->where('full_name', 'LIKE', $searchQuery)
                     ->orWhere('country', 'LIKE', $searchQuery);
             })
-            ->with(['languages', 'travelJourneys'])
-            ->orderBy('created_at', 'desc');
+            ->with(['languages', 'travelJourneys']);
+
+        // SECURITY: Exclude user's own profile if excludeUserId is provided
+        if ($excludeUserId) {
+            $pickers->where('id', '!=', $excludeUserId);
+        }
+
+        $pickers->orderBy('created_at', 'desc');
 
         $total = $pickers->count();
         $offset = ($page - 1) * $limit;

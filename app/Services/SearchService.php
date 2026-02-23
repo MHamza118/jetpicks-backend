@@ -19,7 +19,7 @@ class SearchService
         return $this->formatPagination($users, $this->formatUser($users));
     }
 
-    public function searchOrders(string $query, array $filters = [], int $page = 1, int $limit = 20): array
+    public function searchOrders(string $query, array $filters = [], int $page = 1, int $limit = 20, ?string $excludeUserId = null): array
     {
         $searchTerm = "%{$query}%";
         $lowerSearchTerm = strtolower($query);
@@ -40,6 +40,11 @@ class SearchService
                 ->orWhereRaw('LOWER(destination_country) LIKE ?', ["%{$lowerSearchTerm}%"]);
             });
 
+        // SECURITY: Exclude user's own orders if excludeUserId is provided
+        if ($excludeUserId) {
+            $orders->where('orderer_id', '!=', $excludeUserId);
+        }
+
         if (isset($filters['status'])) {
             $orders->where('status', $filters['status']);
         }
@@ -57,7 +62,7 @@ class SearchService
         return $this->formatPagination($orders, $this->formatOrder($orders));
     }
 
-    public function searchPickers(string $query, array $filters = [], int $page = 1, int $limit = 20): array
+    public function searchPickers(string $query, array $filters = [], int $page = 1, int $limit = 20, ?string $excludeUserId = null): array
     {
         $searchTerm = "%{$query}%";
         $lowerSearchTerm = strtolower($query);
@@ -78,6 +83,11 @@ class SearchService
                 });
             })
             ->with('travelJourneys');
+
+        // SECURITY: Exclude user's own profile if excludeUserId is provided
+        if ($excludeUserId) {
+            $pickers->where('id', '!=', $excludeUserId);
+        }
 
         // Apply additional filters if provided
         if (isset($filters['origin_city'])) {

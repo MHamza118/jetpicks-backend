@@ -68,7 +68,8 @@ class PickerDiscoveryController extends Controller
         $page = (int) $request->query('page', 1);
         $limit = min((int) $request->query('limit', 20), 100);
 
-        $results = $this->pickerDiscoveryService->searchPickers($query, $page, $limit);
+        // SECURITY: Pass current user ID to exclude their own profile
+        $results = $this->pickerDiscoveryService->searchPickers($query, $page, $limit, $request->user()->id);
 
         return response()->json($results);
     }

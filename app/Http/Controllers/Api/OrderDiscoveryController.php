@@ -53,7 +53,9 @@ class OrderDiscoveryController extends Controller
 
         $page = (int) $request->query('page', 1);
         $limit = min((int) $request->query('limit', 20), 100);
-        $results = $this->orderDiscoveryService->searchOrders($query, $page, $limit);
+        
+        // SECURITY: Pass current user ID to exclude their own orders
+        $results = $this->orderDiscoveryService->searchOrders($query, $page, $limit, $request->user()->id);
         return response()->json($results);
     }
 

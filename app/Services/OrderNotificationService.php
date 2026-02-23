@@ -19,9 +19,11 @@ class OrderNotificationService
     public function notifyPickersForNewOrder(Order $order): void
     {
         // Find all pickers with active travel journeys matching this order's route (by country only)
+        // SECURITY: Exclude the orderer from receiving notifications about their own order
         $matchingJourneys = TravelJourney::where('is_active', true)
             ->where('departure_country', $order->origin_country)
             ->where('arrival_country', $order->destination_country)
+            ->where('user_id', '!=', $order->orderer_id) // Exclude orderer's own picker profile
             ->with('user')
             ->get();
 

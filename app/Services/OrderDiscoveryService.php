@@ -29,6 +29,7 @@ class OrderDiscoveryService
         $query = Order::where('status', 'PENDING')
             ->with(['orderer', 'items', 'offers'])
             ->whereDoesntHave('picker')
+            ->where('orderer_id', '!=', $pickerId) // SECURITY: Exclude picker's own orders
             ->has('items');
 
         $query->where(function ($q) use ($journeys) {
@@ -93,7 +94,7 @@ class OrderDiscoveryService
         ];
     }
 
-    public function searchOrders(string $query, int $page = 1, int $limit = 20): array
+    public function searchOrders(string $query, int $page = 1, int $limit = 20, ?string $excludeUserId = null): array
     {
         $searchQuery = "%{$query}%";
 
@@ -113,6 +114,11 @@ class OrderDiscoveryService
                 ->orWhereRaw('LOWER(origin_country) LIKE ?', [strtolower($searchQuery)])
                 ->orWhereRaw('LOWER(destination_country) LIKE ?', [strtolower($searchQuery)]);
             });
+
+        // SECURITY: Exclude user's own orders if excludeUserId is provided
+        if ($excludeUserId) {
+            $orders->where('orderer_id', '!=', $excludeUserId);
+        }
 
         $total = $orders->count();
         $offset = ($page - 1) * $limit;

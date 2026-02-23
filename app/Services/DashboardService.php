@@ -58,6 +58,7 @@ class DashboardService
 
         $query = TravelJourney::with('user')
             ->where('is_active', true)
+            ->where('user_id', '!=', $ordererId) // SECURITY: Exclude orderer's own picker profile
             ->where('arrival_date', '>=', now()->toDateString())
             ->orderBy('departure_date', 'asc');
 

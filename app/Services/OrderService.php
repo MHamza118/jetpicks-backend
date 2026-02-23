@@ -295,10 +295,15 @@ class OrderService
             ->with(['items', 'orderer', 'offers']);
 
         // Build the picker assignment condition
-        // Include: orders assigned to this picker, PENDING orders, or CANCELLED orders assigned to this picker
+        // Include: orders assigned to this picker, PENDING orders
+        // SECURITY: Exclude picker's own orders (where orderer_id == pickerId AND assigned_picker_id == pickerId)
         $query->where(function ($q) use ($pickerId) {
-            $q->where('assigned_picker_id', $pickerId)  // Orders assigned to this picker (any status)
-              ->orWhere('status', 'PENDING');            // PENDING orders (available for all pickers)
+            $q->where('assigned_picker_id', $pickerId)  // Orders assigned to this picker
+              ->where('orderer_id', '!=', $pickerId)    // But NOT their own orders
+              ->orWhere(function ($subQ) use ($pickerId) {
+                  $subQ->where('status', 'PENDING')     // PENDING orders (available for all pickers)
+                       ->where('orderer_id', '!=', $pickerId); // But NOT their own orders
+              });
         });
 
         // If a specific status is requested, apply additional filter
