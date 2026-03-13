@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Services\AuthService;
+use App\Services\FacebookAuthService;
 use App\Services\GoogleAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,11 +23,13 @@ class AuthController extends Controller
 {
     protected AuthService $authService;
     protected GoogleAuthService $googleAuthService;
+    protected FacebookAuthService $facebookAuthService;
 
-    public function __construct(AuthService $authService, GoogleAuthService $googleAuthService)
+    public function __construct(AuthService $authService, GoogleAuthService $googleAuthService, FacebookAuthService $facebookAuthService)
     {
         $this->authService = $authService;
         $this->googleAuthService = $googleAuthService;
+        $this->facebookAuthService = $facebookAuthService;
     }
     //for sigpup
     public function register(RegisterRequest $request): JsonResponse
@@ -67,6 +70,31 @@ class AuthController extends Controller
 
         $result = $this->googleAuthService->authenticateWithGoogle(
             $request->idToken,
+            $request->input('role')
+        );
+
+        return response()->json([
+            'message' => $result['isNewUser'] ? 'Account created successfully.' : 'Login successful.',
+            'data' => [
+                'user' => new UserResource($result['user']),
+                'token' => $result['token'],
+                'isNewUser' => $result['isNewUser'],
+            ],
+        ], $result['isNewUser'] ? 201 : 200);
+    }
+
+    /**
+     * Facebook Login/Register
+     */
+    public function facebookLogin(Request $request): JsonResponse
+    {
+        $request->validate([
+            'accessToken' => 'required|string',
+            'role' => 'nullable|in:ORDERER,PICKER',
+        ]);
+
+        $result = $this->facebookAuthService->authenticateWithFacebook(
+            $request->accessToken,
             $request->input('role')
         );
 
