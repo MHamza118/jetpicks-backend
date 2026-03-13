@@ -1,5 +1,3 @@
-<?php
-
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -8,6 +6,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Services\AuthService;
 use App\Services\GoogleAuthService;
+use App\Services\FacebookAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -22,11 +21,13 @@ class AuthController extends Controller
 {
     protected AuthService $authService;
     protected GoogleAuthService $googleAuthService;
+    protected FacebookAuthService $facebookAuthService;
 
-    public function __construct(AuthService $authService, GoogleAuthService $googleAuthService)
+    public function __construct(AuthService $authService, GoogleAuthService $googleAuthService, FacebookAuthService $facebookAuthService)
     {
         $this->authService = $authService;
         $this->googleAuthService = $googleAuthService;
+        $this->facebookAuthService = $facebookAuthService;
     }
     //for sigpup
     public function register(RegisterRequest $request): JsonResponse
@@ -80,7 +81,30 @@ class AuthController extends Controller
         ], $result['isNewUser'] ? 201 : 200);
     }
 
-    //User Logout
+    /**
+     * Facebook Login/Register
+     */
+    public function facebookLogin(Request $request): JsonResponse
+    {
+        $request->validate([
+            'accessToken' => 'required|string',
+            'role' => 'nullable|in:ORDERER,PICKER',
+        ]);
+
+        $result = $this->facebookAuthService->authenticateWithFacebook(
+            $request->accessToken,
+            $request->input('role')
+        );
+
+        return response()->json([
+            'message' => $result['isNewUser'] ? 'Account created successfully.' : 'Login successful.',
+            'data' => [
+                'user' => new UserResource($result['user']),
+                'token' => $result['token'],
+                'isNewUser' => $result['isNewUser'],
+            ],
+        ], $result['isNewUser'] ? 201 : 200);
+    }
     public function logout(Request $request): JsonResponse
     {
         $this->authService->logout($request->user());
