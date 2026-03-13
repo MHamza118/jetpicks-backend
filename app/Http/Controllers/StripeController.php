@@ -1,0 +1,430 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Stripe\Stripe;
+use Stripe\PaymentIntent;
+use Stripe\Webhook;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Services\OrderNotificationService;
+
+class StripeController extends Controller
+{
+    public function __construct()
+    {
+        Stripe::setApiKey(env('STRIPE_SECRET'));
+    }
+
+    /**
+     * Create a payment intent
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function createPaymentIntent(Request $request)
+    {
+        // make sure we at least have a Stripe secret configured, otherwise the SDK will explode
+        if (empty(env('STRIPE_SECRET'))) {
+            \Log::error('StripeController::createPaymentIntent called without STRIPE_SECRET');
+            return response()->json([
+                'success' => false,
+                'error' => 'Stripe configuration error',
+                'message' => 'STRIPE_SECRET is not set on the backend.',
+            ], 500);
+        }
+
+        try {
+            $validated = $request->validate([
+                'amount' => 'required|integer|min:1',
+                'currency' => 'required|string|size:3',
+                'description' => 'nullable|string',
+                'customer_email' => 'nullable|email',
+                'metadata' => 'nullable|array',
+                'order_id' => 'nullable|string|exists:orders,id',
+            ]);
+
+            // Prepare metadata
+            $metadata = $validated['metadata'] ?? [];
+            
+            // If order_id provided, check if it exists and get order details
+            $order = null;
+            if (!empty($validated['order_id'])) {
+                $order = Order::find($validated['order_id']);
+                
+                // Check if order already paid
+                if ($order && $order->payment_status === 'PAID') {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'Order already paid',
+                        'message' => 'This order has already been paid.',
+                    ], 400);
+                }
+                
+                if ($order) {
+                    $metadata['order_id'] = $order->id;
+                    $metadata['orderer_id'] = $order->orderer_id;
+                }
+            }
+
+            $paymentIntent = PaymentIntent::create([
+                'amount' => $validated['amount'],
+                'currency' => $validated['currency'],
+                'description' => $validated['description'] ?? null,
+                'receipt_email' => $validated['customer_email'] ?? null,
+                'metadata' => $metadata,
+            ]);
+
+            // Create payment record in database only if we have user_id
+            $userId = auth()->id();
+            if ($order) {
+                $userId = $userId ?? $order->orderer_id;
+            }
+            
+            if ($userId) {
+                try {
+                    Payment::create([
+                        'order_id' => $order?->id,
+                        'user_id' => $userId,
+                        'stripe_payment_intent_id' => $paymentIntent->id,
+                        'amount' => $validated['amount'] / 100, // Convert cents to dollars
+                        'currency' => $validated['currency'],
+                        'status' => 'PENDING',
+                        'metadata' => json_encode($metadata),
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to create payment record: ' . $e->getMessage());
+                    // Continue anyway - payment intent was created successfully
+                }
+            }
+
+            // Update order if exists
+            if ($order) {
+                $order->update([
+                    'stripe_payment_intent_id' => $paymentIntent->id,
+                    'payment_status' => 'PENDING',
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'clientSecret' => $paymentIntent->client_secret,
+                'paymentIntentId' => $paymentIntent->id,
+                'amount' => $paymentIntent->amount,
+                'currency' => $paymentIntent->currency,
+                'status' => $paymentIntent->status,
+            ], 200);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::warning('StripeController validation failed: ' . json_encode($e->errors()));
+            return response()->json([
+                'success' => false,
+                'error' => 'Validation error',
+                'messages' => $e->errors(),
+            ], 422);
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            // This usually happens when Stripe rejects currency/amount (unsupported currency or too small)
+            \Log::warning('StripeController invalid request: ' . $e->getMessage());
+
+            $msg = $e->getMessage();
+            // detect minimum-amount error and give friendlier message
+            if (str_contains($msg, 'Amount must convert to at least')) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Amount too small',
+                    'message' => 'The order total ('.$validated['amount'].' '.$validated['currency'].') is too small for Stripe (minimum 50 cents USD). Please choose a supported currency or increase the amount.',
+                ], 400);
+            }
+
+            // fall back to generic message
+            return response()->json([
+                'success' => false,
+                'error' => 'Invalid payment parameters',
+                'message' => $msg,
+            ], 400);
+        } catch (\Exception $e) {
+            // log the exact Stripe / internal error so we can inspect backend logs
+            \Log::error('StripeController::createPaymentIntent exception: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Payment intent creation failed',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Confirm payment intent
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function confirmPayment(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'paymentIntentId' => 'required|string',
+            ]);
+
+            $paymentIntent = PaymentIntent::retrieve($validated['paymentIntentId']);
+
+            // If payment succeeded, update our database immediately
+            if ($paymentIntent->status === 'succeeded') {
+                $this->updatePaymentStatus($paymentIntent->id, 'SUCCEEDED');
+            }
+
+            return response()->json([
+                'success' => true,
+                'status' => $paymentIntent->status,
+                'paymentIntentId' => $paymentIntent->id,
+                'amount' => $paymentIntent->amount,
+                'currency' => $paymentIntent->currency,
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to confirm payment',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update payment status in database
+     */
+    private function updatePaymentStatus(string $paymentIntentId, string $status)
+    {
+        try {
+            // Find payment record
+            $payment = Payment::where('stripe_payment_intent_id', $paymentIntentId)->first();
+            
+            if ($payment) {
+                // Update payment status
+                $updateData = ['status' => $status];
+                
+                if ($status === 'SUCCEEDED') {
+                    $updateData['paid_at'] = now();
+                } elseif ($status === 'FAILED') {
+                    $updateData['failed_at'] = now();
+                }
+                
+                $payment->update($updateData);
+
+                // Update order payment status
+                if ($payment->order_id) {
+                    $order = Order::find($payment->order_id);
+                    if ($order) {
+                        $previousPaymentStatus = $order->payment_status;
+                        $orderStatus = $status === 'SUCCEEDED' ? 'PAID' : 
+                                      ($status === 'FAILED' ? 'FAILED' : 'PENDING');
+                        
+                        $orderUpdate = ['payment_status' => $orderStatus];
+                        
+                        if ($status === 'SUCCEEDED') {
+                            $orderUpdate['payment_completed_at'] = now();
+                        }
+                        
+                        $order->update($orderUpdate);
+
+                        // Notify assigned picker only when payment transitions to PAID.
+                        if ($previousPaymentStatus !== 'PAID' && $orderStatus === 'PAID') {
+                            app(OrderNotificationService::class)->notifyPickerPaymentConfirmed($order);
+                        }
+                        
+                        \Log::info("Order {$order->id} payment status updated to {$orderStatus}");
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error updating payment status: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Check order payment status
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function checkOrderPaymentStatus(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'order_id' => 'required|string|exists:orders,id',
+            ]);
+
+            $order = Order::with('payments')->find($validated['order_id']);
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Order not found',
+                ], 404);
+            }
+
+            // Check if user has access to this order
+            $user = auth()->user();
+            if ($user && $order->orderer_id !== $user->id && $order->assigned_picker_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Unauthorized access to order',
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => true,
+                'order_id' => $order->id,
+                'payment_status' => $order->payment_status,
+                'is_paid' => $order->isPaid(),
+                'payment_completed_at' => $order->payment_completed_at,
+                'stripe_payment_intent_id' => $order->stripe_payment_intent_id,
+                'order_status' => $order->status,
+                'latest_payment' => $order->payments()->latest()->first(),
+            ], 200);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Validation error',
+                'messages' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to check payment status',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Handle Stripe webhook
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function handleWebhook(Request $request)
+    {
+        $endpoint_secret = env('STRIPE_WEBHOOK_SECRET');
+        
+        $sig_header = $request->header('Stripe-Signature');
+        $body = $request->getContent();
+
+        try {
+            $event = Webhook::constructEvent(
+                $body,
+                $sig_header,
+                $endpoint_secret
+            );
+        } catch (\UnexpectedValueException $e) {
+            // Invalid payload
+            return response('', 400);
+        } catch (\Stripe\Exception\SignatureVerificationException $e) {
+            // Invalid signature
+            return response('', 400);
+        }
+
+        // Handle the event
+        switch ($event['type']) {
+            case 'payment_intent.succeeded':
+                $paymentIntent = $event['data']['object'];
+                $this->handlePaymentSucceeded($paymentIntent);
+                break;
+
+            case 'payment_intent.payment_failed':
+                $paymentIntent = $event['data']['object'];
+                $this->handlePaymentFailed($paymentIntent);
+                break;
+
+            case 'charge.refunded':
+                $charge = $event['data']['object'];
+                $this->handleChargeRefunded($charge);
+                break;
+
+            default:
+                // Unhandled event type
+                break;
+        }
+
+        return response()->json(['success' => true], 200);
+    }
+
+    /**
+     * Handle successful payment
+     */
+    private function handlePaymentSucceeded($paymentIntent)
+    {
+        \Log::info('Payment succeeded: ' . $paymentIntent['id']);
+
+        try {
+            $this->updatePaymentStatus($paymentIntent['id'], 'SUCCEEDED');
+            
+            // Send confirmation email if needed
+            // TODO: Implement email notification
+            
+        } catch (\Exception $e) {
+            \Log::error('Error handling payment success: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle failed payment
+     */
+    private function handlePaymentFailed($paymentIntent)
+    {
+        \Log::info('Payment failed: ' . $paymentIntent['id']);
+
+        try {
+            $this->updatePaymentStatus($paymentIntent['id'], 'FAILED');
+            
+            // Send failure notification
+            // TODO: Implement failure notification
+            
+        } catch (\Exception $e) {
+            \Log::error('Error handling payment failure: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Handle refunded charge
+     */
+    private function handleChargeRefunded($charge)
+    {
+        \Log::info('Charge refunded: ' . $charge['id']);
+
+        try {
+            // Find payment record by payment intent
+            $paymentIntentId = $charge['payment_intent'] ?? null;
+            
+            if ($paymentIntentId) {
+                $payment = Payment::where('stripe_payment_intent_id', $paymentIntentId)->first();
+                
+                if ($payment) {
+                    // Update payment status
+                    $payment->update([
+                        'status' => 'REFUNDED',
+                        'refunded_at' => now(),
+                    ]);
+
+                    // Update order payment status
+                    if ($payment->order_id) {
+                        $order = Order::find($payment->order_id);
+                        if ($order) {
+                            $order->update([
+                                'payment_status' => 'REFUNDED',
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // Send refund notification to user
+            // TODO: Implement refund notification
+            
+        } catch (\Exception $e) {
+            \Log::error('Error handling refund: ' . $e->getMessage());
+        }
+    }
+}

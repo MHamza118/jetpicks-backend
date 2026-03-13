@@ -203,6 +203,23 @@ class OrderService
         $order = Order::with(['items', 'orderer', 'picker', 'offers'])
             ->findOrFail($orderId);
 
+        // Backfill seller notification for already-paid orders created before notification trigger existed.
+        $currentUserId = auth()->id();
+        if (
+            $currentUserId
+            && $order->payment_status === 'PAID'
+            && $order->assigned_picker_id === $currentUserId
+        ) {
+            $alreadyNotified = \App\Models\Notification::where('user_id', $order->assigned_picker_id)
+                ->where('type', 'PAYMENT_CONFIRMED')
+                ->where('entity_id', $order->id)
+                ->exists();
+
+            if (!$alreadyNotified) {
+                $this->orderNotificationService->notifyPickerPaymentConfirmed($order);
+            }
+        }
+
         $itemsCost = $order->items->sum(fn($item) => $item->price * $item->quantity);
 
         // Get chat room if order is accepted
@@ -224,6 +241,7 @@ class OrderService
             'accepted_counter_offer_amount' => $order->accepted_counter_offer_amount,
             'waiting_days' => $order->waiting_days,
             'status' => $order->status,
+            'payment_status' => $order->payment_status,
             'items_count' => $order->items->count(),
             'items_cost' => $itemsCost,
             'currency' => $order->currency,

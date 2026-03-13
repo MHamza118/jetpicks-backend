@@ -79,8 +79,14 @@ class DeliveryService
             throw new \Exception('Only orderer can confirm delivery');
         }
 
-        if ($order->status !== 'DELIVERED') {
-            throw new \Exception('Order must be DELIVERED to confirm');
+        // Allow confirmation if order is ACCEPTED and payment is complete, or if DELIVERED
+        if (!in_array($order->status, ['ACCEPTED', 'DELIVERED'])) {
+            throw new \Exception('Order must be ACCEPTED or DELIVERED to confirm');
+        }
+
+        // Only check payment status if order is still ACCEPTED (not yet delivered by picker)
+        if ($order->status === 'ACCEPTED' && $order->payment_status !== 'PAID') {
+            throw new \Exception('Payment must be completed before confirming delivery');
         }
 
         if ($order->delivery_issue_reported) {
@@ -102,8 +108,14 @@ class DeliveryService
             throw new \Exception('Only orderer can report issue');
         }
 
-        if ($order->status !== 'DELIVERED') {
-            throw new \Exception('Can only report issue on DELIVERED orders');
+        // Allow reporting issue if order is ACCEPTED and payment is complete, or if DELIVERED
+        if (!in_array($order->status, ['ACCEPTED', 'DELIVERED'])) {
+            throw new \Exception('Can only report issue on ACCEPTED or DELIVERED orders');
+        }
+
+        // Only check payment status if order is still ACCEPTED
+        if ($order->status === 'ACCEPTED' && $order->payment_status !== 'PAID') {
+            throw new \Exception('Payment must be completed before reporting issues');
         }
 
         $order->update([

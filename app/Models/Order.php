@@ -27,6 +27,9 @@ class Order extends Model
         'accepted_counter_offer_amount',
         'currency',
         'status',
+        'payment_status',
+        'stripe_payment_intent_id',
+        'payment_completed_at',
         'delivered_at',
         'delivery_confirmed_at',
         'delivery_issue_reported',
@@ -43,6 +46,7 @@ class Order extends Model
         'delivered_at' => 'datetime',
         'delivery_confirmed_at' => 'datetime',
         'accepted_at' => 'datetime',
+        'payment_completed_at' => 'datetime',
     ];
 
     public function orderer(): BelongsTo
@@ -78,5 +82,26 @@ class Order extends Model
     public function tips(): HasMany
     {
         return $this->hasMany(Tip::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Check if order payment is completed
+     */
+    public function isPaid(): bool
+    {
+        return $this->payment_status === 'PAID';
+    }
+
+    /**
+     * Check if order payment is pending
+     */
+    public function isPaymentPending(): bool
+    {
+        return $this->payment_status === 'PENDING';
     }
 }

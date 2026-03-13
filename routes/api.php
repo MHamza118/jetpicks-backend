@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\StripeController;
 
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
@@ -92,6 +93,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('chat-rooms/{roomId}/messages', [\App\Http\Controllers\Api\ChatController::class, 'getMessages']);
     Route::post('chat-rooms/{roomId}/messages', [\App\Http\Controllers\Api\ChatController::class, 'sendMessage']);
     Route::put('chat-messages/{messageId}/read', [\App\Http\Controllers\Api\ChatController::class, 'markAsRead']);
+    Route::post('chat-messages/{messageId}/translate', [\App\Http\Controllers\Api\ChatController::class, 'translateMessage']);
 });
 
 // Delivery
@@ -161,3 +163,13 @@ Route::middleware('auth:sanctum')->group(function () {
 // Locations (Countries & Cities)
 Route::get('locations/countries', [\App\Http\Controllers\Api\LocationController::class, 'getCountries']);
 Route::post('locations/cities', [\App\Http\Controllers\Api\LocationController::class, 'getCities']);
+
+// Stripe Payment Routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('stripe/create-payment-intent', [StripeController::class, 'createPaymentIntent']);
+    Route::post('stripe/confirm-payment', [StripeController::class, 'confirmPayment']);
+    Route::post('stripe/check-order-payment', [StripeController::class, 'checkOrderPaymentStatus']);
+});
+
+// Stripe Webhook - No authentication required
+Route::post('stripe/webhook', [StripeController::class, 'handleWebhook']);

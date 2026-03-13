@@ -161,7 +161,20 @@ class UserService
 
     public function updateSettings(User $user, array $data, string $role = 'picker'): PickerSetting|OrdererSetting
     {
-        // Determine which settings table to use based on role
+        // Define fields that should be synchronized across both roles for a consistent experience
+        $syncFields = [
+            'translation_language',
+            'auto_translate_messages',
+            'show_original_and_translated'
+        ];
+
+        // If a translation language is being set, we should probably default auto_translate to true 
+        // if it's not strictly provided as false, to fulfill user expectation that setting a language "works".
+        if (isset($data['translation_language']) && !isset($data['auto_translate_messages'])) {
+            $data['auto_translate_messages'] = true;
+        }
+
+        // 1. Update/Create the primary role settings requested
         if ($role === 'orderer') {
             $settings = $user->ordererSettings;
             if (!$settings) {
@@ -210,6 +223,37 @@ class UserService
                     'auto_translate_messages' => $data['auto_translate_messages'] ?? $settings->auto_translate_messages,
                     'show_original_and_translated' => $data['show_original_and_translated'] ?? $settings->show_original_and_translated,
                 ]);
+            }
+        }
+
+        // 2. Synchronize language/translation settings to the OTHER role as well
+        // This ensures if a user updates their language as an Orderer, it also applies when they act as a Picker.
+        $otherRole = ($role === 'orderer') ? 'picker' : 'orderer';
+        $otherSettings = ($otherRole === 'orderer') ? $user->ordererSettings : $user->pickerSettings;
+        
+        $syncData = [];
+        foreach ($syncFields as $field) {
+            if (isset($data[$field])) {
+                $syncData[$field] = $data[$field];
+            }
+        }
+
+        if (!empty($syncData)) {
+            if ($otherSettings) {
+                $otherSettings->update($syncData);
+            } else {
+                // Create other settings with standard defaults plus synced fields
+                $modelClass = ($otherRole === 'orderer') ? OrdererSetting::class : PickerSetting::class;
+                $modelClass::create(array_merge([
+                    'user_id' => $user->id,
+                    'push_notifications_enabled' => true,
+                    'in_app_notifications_enabled' => true,
+                    'message_notifications_enabled' => true,
+                    'location_services_enabled' => true,
+                    'translation_language' => 'English',
+                    'auto_translate_messages' => false,
+                    'show_original_and_translated' => true,
+                ], $syncData));
             }
         }
 

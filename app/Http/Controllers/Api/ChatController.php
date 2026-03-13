@@ -79,6 +79,7 @@ class ChatController extends Controller
                 'sender_id' => $message->sender_id,
                 'content_original' => $message->content_original,
                 'content_translated' => $message->content_translated,
+                'translation_enabled' => (bool) $message->content_translated,
                 'is_read' => $message->is_read,
                 'created_at' => $message->created_at,
             ],
@@ -106,6 +107,36 @@ class ChatController extends Controller
                 'is_read' => $updatedMessage->is_read,
             ],
         ]);
+    }
+
+    public function translateMessage(string $messageId, Request $request): JsonResponse
+    {
+        $userId = auth()->id();
+        $message = ChatMessage::with('chatRoom')->find($messageId);
+        if (!$message) {
+            return response()->json(['message' => 'Message not found'], 404);
+        }
+        $room = $message->chatRoom;
+        if ($room->orderer_id !== $userId && $room->picker_id !== $userId) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $targetLanguageCode = $request->input('target_language_code', 'en');
+        $translated = $this->chatService->translateExistingMessage($messageId, $targetLanguageCode);
+
+        if ($translated) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'content_translated' => $translated,
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Translation failed',
+        ], 500);
     }
     //get or create chat room for order
     public function getOrCreateChatRoom(Request $request): JsonResponse
