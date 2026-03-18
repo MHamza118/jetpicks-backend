@@ -14,6 +14,14 @@ Route::prefix('admin')->group(function () {
     Route::middleware(['auth:sanctum', 'admin'])->group(function () {
         Route::post('logout', [AdminAuthController::class, 'logout']);
         Route::get('me', [AdminAuthController::class, 'me']);
+        
+        // Users Management
+        Route::get('users', [\App\Http\Controllers\Api\AdminUsersController::class, 'index']);
+        Route::post('users', [\App\Http\Controllers\Api\AdminUsersController::class, 'store']);
+        Route::get('users/{id}', [\App\Http\Controllers\Api\AdminUsersController::class, 'show']);
+        Route::put('users/{id}', [\App\Http\Controllers\Api\AdminUsersController::class, 'update']);
+        Route::delete('users/{id}', [\App\Http\Controllers\Api\AdminUsersController::class, 'destroy']);
+        Route::patch('users/{id}/toggle-status', [\App\Http\Controllers\Api\AdminUsersController::class, 'toggleStatus']);
     });
 });
 

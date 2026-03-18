@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('country', 100)->nullable()->comment('From Personal Details / Settings.');
             $table->json('roles')->comment("Array of roles: ['PICKER', 'ORDERER'] or both. Sourced from Profile screen badges.");
             $table->text('avatar_url')->nullable()->comment('From Profile avatar.');
+            $table->boolean('is_active')->default(true);
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent()->useCurrentOnUpdate();
         });

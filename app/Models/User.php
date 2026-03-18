@@ -22,6 +22,7 @@ class User extends Authenticatable
         'country',
         'roles',
         'avatar_url',
+        'is_active',
     ];
 
     protected $hidden = [
@@ -33,6 +34,7 @@ class User extends Authenticatable
     {
         return [
             'roles' => 'array',
+            'is_active' => 'boolean',
         ];
     }
     
