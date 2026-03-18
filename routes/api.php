@@ -30,6 +30,10 @@ Route::prefix('admin')->group(function () {
         // Travel Journeys Management
         Route::get('travel-journeys', [\App\Http\Controllers\Api\AdminTravelJourneyController::class, 'index']);
         Route::get('travel-journeys/{id}', [\App\Http\Controllers\Api\AdminTravelJourneyController::class, 'show']);
+
+        // Offers Management
+        Route::get('offers', [\App\Http\Controllers\Api\AdminOffersController::class, 'index']);
+        Route::get('offers/{id}', [\App\Http\Controllers\Api\AdminOffersController::class, 'show']);
     });
 });
 
