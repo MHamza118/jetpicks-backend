@@ -50,6 +50,12 @@ Route::prefix('admin')->group(function () {
         // Chat Management
         Route::get('chat-rooms', [\App\Http\Controllers\Api\AdminChatController::class, 'index']);
         Route::get('chat-rooms/{id}', [\App\Http\Controllers\Api\AdminChatController::class, 'show']);
+
+        // Admin Settings
+        Route::get('settings', [\App\Http\Controllers\Api\AdminSettingsController::class, 'getSettings']);
+        Route::put('settings', [\App\Http\Controllers\Api\AdminSettingsController::class, 'updateSettings']);
+        Route::put('settings/profile', [\App\Http\Controllers\Api\AdminSettingsController::class, 'updateProfile']);
+        Route::post('settings/change-password', [\App\Http\Controllers\Api\AdminSettingsController::class, 'changePassword']);
     });
 });
 
