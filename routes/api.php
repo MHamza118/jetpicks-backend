@@ -46,6 +46,10 @@ Route::prefix('admin')->group(function () {
         // Notifications Management
         Route::get('notifications', [\App\Http\Controllers\Api\AdminNotificationsController::class, 'index']);
         Route::get('notifications/{id}', [\App\Http\Controllers\Api\AdminNotificationsController::class, 'show']);
+
+        // Chat Management
+        Route::get('chat-rooms', [\App\Http\Controllers\Api\AdminChatController::class, 'index']);
+        Route::get('chat-rooms/{id}', [\App\Http\Controllers\Api\AdminChatController::class, 'show']);
     });
 });
 
