@@ -32,6 +32,8 @@ class AdminOffersController extends Controller
                         ->paginate($request->get('per_page', 15));
 
         $items = collect($offers->items())->map(function ($offer) {
+            $latestCounterOffer = $offer->childOffers()->latest('created_at')->first();
+            
             return [
                 'id' => $offer->id,
                 'order' => $offer->order ? [
@@ -50,7 +52,7 @@ class AdminOffersController extends Controller
                 'offer_type' => $offer->offer_type,
                 'offer_amount' => $offer->offer_amount,
                 'status' => $offer->status,
-                'counter_offers_count' => $offer->childOffers()->count(),
+                'counter_offer_amount' => $latestCounterOffer ? $latestCounterOffer->offer_amount : null,
                 'created_at' => $offer->created_at,
             ];
         });

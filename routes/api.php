@@ -34,6 +34,10 @@ Route::prefix('admin')->group(function () {
         // Offers Management
         Route::get('offers', [\App\Http\Controllers\Api\AdminOffersController::class, 'index']);
         Route::get('offers/{id}', [\App\Http\Controllers\Api\AdminOffersController::class, 'show']);
+
+        // Payments Management
+        Route::get('payments', [\App\Http\Controllers\Api\AdminPaymentsController::class, 'index']);
+        Route::get('payments/{id}', [\App\Http\Controllers\Api\AdminPaymentsController::class, 'show']);
     });
 });
 
