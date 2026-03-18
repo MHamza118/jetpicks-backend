@@ -38,6 +38,14 @@ Route::prefix('admin')->group(function () {
         // Payments Management
         Route::get('payments', [\App\Http\Controllers\Api\AdminPaymentsController::class, 'index']);
         Route::get('payments/{id}', [\App\Http\Controllers\Api\AdminPaymentsController::class, 'show']);
+
+        // Reviews Management
+        Route::get('reviews', [\App\Http\Controllers\Api\AdminReviewsController::class, 'index']);
+        Route::get('reviews/{id}', [\App\Http\Controllers\Api\AdminReviewsController::class, 'show']);
+
+        // Notifications Management
+        Route::get('notifications', [\App\Http\Controllers\Api\AdminNotificationsController::class, 'index']);
+        Route::get('notifications/{id}', [\App\Http\Controllers\Api\AdminNotificationsController::class, 'show']);
     });
 });
 
