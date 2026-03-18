@@ -26,6 +26,10 @@ Route::prefix('admin')->group(function () {
         // Orders Management
         Route::get('orders', [\App\Http\Controllers\Api\AdminOrdersController::class, 'index']);
         Route::get('orders/{id}', [\App\Http\Controllers\Api\AdminOrdersController::class, 'show']);
+
+        // Travel Journeys Management
+        Route::get('travel-journeys', [\App\Http\Controllers\Api\AdminTravelJourneyController::class, 'index']);
+        Route::get('travel-journeys/{id}', [\App\Http\Controllers\Api\AdminTravelJourneyController::class, 'show']);
     });
 });
 
