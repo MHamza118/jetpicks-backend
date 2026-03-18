@@ -3,8 +3,19 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\StripeController;
+
+// Admin Authentication Routes
+Route::prefix('admin')->group(function () {
+    Route::post('login', [AdminAuthController::class, 'login']);
+    
+    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+        Route::post('logout', [AdminAuthController::class, 'logout']);
+        Route::get('me', [AdminAuthController::class, 'me']);
+    });
+});
 
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
