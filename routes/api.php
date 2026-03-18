@@ -58,6 +58,10 @@ Route::prefix('admin')->group(function () {
         Route::post('settings/change-password', [\App\Http\Controllers\Api\AdminSettingsController::class, 'changePassword']);
         Route::post('settings/avatar', [\App\Http\Controllers\Api\AdminSettingsController::class, 'uploadAvatar']);
         Route::delete('settings/avatar', [\App\Http\Controllers\Api\AdminSettingsController::class, 'removeAvatar']);
+
+        // Dashboard
+        Route::get('dashboard/stats', [\App\Http\Controllers\Api\AdminDashboardController::class, 'getStats']);
+        Route::get('dashboard/recent-activity', [\App\Http\Controllers\Api\AdminDashboardController::class, 'getRecentActivity']);
     });
 });
 
