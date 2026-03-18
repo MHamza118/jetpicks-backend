@@ -22,6 +22,10 @@ Route::prefix('admin')->group(function () {
         Route::put('users/{id}', [\App\Http\Controllers\Api\AdminUsersController::class, 'update']);
         Route::delete('users/{id}', [\App\Http\Controllers\Api\AdminUsersController::class, 'destroy']);
         Route::patch('users/{id}/toggle-status', [\App\Http\Controllers\Api\AdminUsersController::class, 'toggleStatus']);
+
+        // Orders Management
+        Route::get('orders', [\App\Http\Controllers\Api\AdminOrdersController::class, 'index']);
+        Route::get('orders/{id}', [\App\Http\Controllers\Api\AdminOrdersController::class, 'show']);
     });
 });
 
