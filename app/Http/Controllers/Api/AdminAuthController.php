@@ -46,6 +46,7 @@ class AdminAuthController extends Controller
                     'email' => $admin->email,
                     'role' => $admin->role,
                     'is_active' => $admin->is_active,
+                    'avatar_url' => $admin->avatar_url ? asset('storage/' . $admin->avatar_url) : null,
                 ],
                 'token' => $token,
             ],
@@ -79,6 +80,7 @@ class AdminAuthController extends Controller
                     'email' => $admin->email,
                     'role' => $admin->role,
                     'is_active' => $admin->is_active,
+                    'avatar_url' => $admin->avatar_url ? asset('storage/' . $admin->avatar_url) : null,
                 ],
             ],
         ]);

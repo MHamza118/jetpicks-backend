@@ -98,4 +98,43 @@ class AdminSettingsController extends Controller
             'message' => 'Password changed successfully',
         ]);
     }
+
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpeg,png,gif,webp|max:5120',
+        ]);
+
+        $admin = $request->user();
+
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $path = $file->store('avatars/admin', 'public');
+
+            $admin->avatar_url = $path;
+            $admin->save();
+
+            return response()->json([
+                'message' => 'Avatar uploaded successfully',
+                'data' => [
+                    'avatar_url' => asset('storage/' . $path),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'No file provided',
+        ], 400);
+    }
+
+    public function removeAvatar(Request $request): JsonResponse
+    {
+        $admin = $request->user();
+        $admin->avatar_url = null;
+        $admin->save();
+
+        return response()->json([
+            'message' => 'Avatar removed successfully',
+        ]);
+    }
 }

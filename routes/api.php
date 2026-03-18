@@ -56,6 +56,8 @@ Route::prefix('admin')->group(function () {
         Route::put('settings', [\App\Http\Controllers\Api\AdminSettingsController::class, 'updateSettings']);
         Route::put('settings/profile', [\App\Http\Controllers\Api\AdminSettingsController::class, 'updateProfile']);
         Route::post('settings/change-password', [\App\Http\Controllers\Api\AdminSettingsController::class, 'changePassword']);
+        Route::post('settings/avatar', [\App\Http\Controllers\Api\AdminSettingsController::class, 'uploadAvatar']);
+        Route::delete('settings/avatar', [\App\Http\Controllers\Api\AdminSettingsController::class, 'removeAvatar']);
     });
 });
 
