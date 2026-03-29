@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('password');
             $table->enum('role', ['super_admin', 'admin', 'moderator'])->default('admin');
             $table->boolean('is_active')->default(true);
+            $table->text('avatar_url')->nullable();
             $table->rememberToken();
             $table->timestamps();
         });

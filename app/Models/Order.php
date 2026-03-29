@@ -36,6 +36,21 @@ class Order extends Model
         'auto_confirmed',
         'accepted_at',
         'waiting_days',
+        // Delivery milestone tracking
+        'delivery_milestone',
+        'items_purchased_at',
+        'departed_at',
+        'dropped_at_locker_at',
+        'ready_to_meet_at',
+        // Delivery outcome (3-option system)
+        'delivery_outcome',
+        'delivery_notes',
+        'item_delivery_statuses',
+        // Delivery method & InPost
+        'delivery_method',
+        'inpost_locker_id',
+        'inpost_tracking_number',
+        'delivery_address',
     ];
 
     protected $casts = [
@@ -47,6 +62,13 @@ class Order extends Model
         'delivery_confirmed_at' => 'datetime',
         'accepted_at' => 'datetime',
         'payment_completed_at' => 'datetime',
+        // Milestone timestamps
+        'items_purchased_at' => 'datetime',
+        'departed_at' => 'datetime',
+        'dropped_at_locker_at' => 'datetime',
+        'ready_to_meet_at' => 'datetime',
+        // Delivery outcome
+        'item_delivery_statuses' => 'array',
     ];
 
     public function orderer(): BelongsTo

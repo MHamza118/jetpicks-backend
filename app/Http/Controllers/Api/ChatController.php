@@ -212,6 +212,7 @@ class ChatController extends Controller
             'data' => [
                 'id' => $room->id,
                 'order_id' => $room->order_id,
+                'payment_status' => $room->order?->payment_status ?? 'PENDING',
                 'orderer' => [
                     'id' => $room->orderer->id,
                     'full_name' => $room->orderer->full_name,
@@ -256,6 +257,7 @@ class ChatController extends Controller
             'data' => [
                 'id' => $room->id,
                 'order_id' => $room->order_id,
+                'payment_status' => $room->order?->payment_status ?? 'PENDING',
                 'orderer' => [
                     'id' => $room->orderer->id,
                     'full_name' => $room->orderer->full_name,

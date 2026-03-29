@@ -86,6 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('user/profile', [UserController::class, 'updateProfile']);
     Route::post('user/avatar', [UserController::class, 'updateAvatar']);
     Route::post('user/change-password', [UserController::class, 'changePassword']);
+    // GDPR: hard delete account and all personal data
+    Route::delete('user', [UserController::class, 'deleteAccount']);
     
     // Picker settings
     Route::get('picker/settings', [UserController::class, 'getPickerSettings']);
@@ -158,6 +160,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Delivery
 Route::middleware('auth:sanctum')->group(function () {
+    // Milestone tracking — Jetbuyer taps in app
+    Route::post('orders/{order}/milestone', [\App\Http\Controllers\Api\DeliveryController::class, 'updateMilestone']);
+    // 3-option delivery outcome (all_delivered | partial_delivery | unable_to_deliver)
+    Route::post('orders/{order}/deliver', [\App\Http\Controllers\Api\DeliveryController::class, 'submitDelivery']);
+    // Delivery method chosen at Order Accepted screen (Jetpicker chooses)
+    Route::put('orders/{order}/delivery-method', [\App\Http\Controllers\Api\DeliveryController::class, 'setDeliveryMethod']);
+    // Jetbuyer sets specific InPost locker after payment
+    Route::put('orders/{order}/inpost-locker', [\App\Http\Controllers\Api\DeliveryController::class, 'setInpostLocker']);
+    // Legacy endpoints kept for backward compat
     Route::put('orders/{order}/mark-delivered', [\App\Http\Controllers\Api\DeliveryController::class, 'markDelivered']);
     Route::put('orders/{order}/confirm-delivery', [\App\Http\Controllers\Api\DeliveryController::class, 'confirmDelivery']);
     Route::put('orders/{order}/report-issue', [\App\Http\Controllers\Api\DeliveryController::class, 'reportIssue']);
@@ -233,3 +244,19 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Stripe Webhook - No authentication required
 Route::post('stripe/webhook', [StripeController::class, 'handleWebhook']);
+
+// InPost Locker Delivery
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('inpost/lockers', [\App\Http\Controllers\Api\InPostController::class, 'findLockers']);
+    Route::post('inpost/shipments', [\App\Http\Controllers\Api\InPostController::class, 'createShipment']);
+    Route::get('inpost/tracking/{trackingNumber}', [\App\Http\Controllers\Api\InPostController::class, 'getTracking']);
+    Route::get('inpost/availability', [\App\Http\Controllers\Api\InPostController::class, 'checkAvailability']);
+});
+
+// Stripe Connect — Jetbuyer bank onboarding and payouts
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('stripe/onboarding-link', [StripeController::class, 'createOnboardingLink']);
+    Route::get('stripe/onboarding-status', [StripeController::class, 'getOnboardingStatus']);
+    Route::post('stripe/payouts', [StripeController::class, 'createPayout']);
+    Route::get('stripe/wallet', [StripeController::class, 'getWalletBalance']);
+});

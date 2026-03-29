@@ -31,7 +31,8 @@ class OfferController extends Controller
                 $request->input('order_id'),
                 $request->user()->id,
                 (float) $request->input('offer_amount'),
-                $request->input('parent_offer_id')
+                $request->input('parent_offer_id'),
+                $request->input('note') // Optional message explaining the counter offer
             );
             return response()->json([
                 'message' => 'Counter-offer created successfully',
@@ -43,6 +44,7 @@ class OfferController extends Controller
                     'offer_amount' => $offer->offer_amount,
                     'parent_offer_id' => $offer->parent_offer_id,
                     'status' => $offer->status,
+                    'note' => $offer->note,
                     'created_at' => $offer->created_at,
                 ],
             ], 201);

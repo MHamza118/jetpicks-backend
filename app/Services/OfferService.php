@@ -31,7 +31,7 @@ class OfferService
         ]);
     }
 
-    public function createCounterOffer(string $orderId, string $pickerId, float $offerAmount, ?string $parentOfferId = null): Offer
+    public function createCounterOffer(string $orderId, string $pickerId, float $offerAmount, ?string $parentOfferId = null, ?string $note = null): Offer
     {
         \Log::info('OfferService::createCounterOffer called', [
             'orderId' => $orderId,
@@ -39,6 +39,7 @@ class OfferService
             'offerAmount' => $offerAmount,
             'offerAmount_type' => gettype($offerAmount),
             'parentOfferId' => $parentOfferId,
+            'note' => $note,
         ]);
 
         $order = Order::find($orderId);
@@ -46,7 +47,7 @@ class OfferService
             throw new \Exception('Order not found');
         }
 
-        // Check if picker already sent a counter offer for this order
+        // One-shot limit: Jetbuyer can only send one counter offer per order
         $existingCounterOffer = Offer::where('order_id', $orderId)
             ->where('offered_by_user_id', $pickerId)
             ->where('offer_type', 'COUNTER')
@@ -54,7 +55,7 @@ class OfferService
             ->first();
 
         if ($existingCounterOffer) {
-            throw new \Exception('You have already sent a counter offer for this order. Wait for the orderer to respond.');
+            throw new \Exception('You have already sent a counter offer for this order. You can only send one counter offer — wait for the Jetpicker to accept or decline.');
         }
 
         if (!$parentOfferId) {
@@ -80,6 +81,7 @@ class OfferService
             'offer_amount' => $offerAmount,
             'status' => 'PENDING',
             'parent_offer_id' => $parentOfferId,
+            'note' => $note, // Optional message explaining the counter offer
         ]);
 
         \Log::info('Counter offer created successfully', [
@@ -87,14 +89,15 @@ class OfferService
             'offer_amount' => $counterOffer->offer_amount,
         ]);
 
-        // Notify orderer about counter offer
+        // Notify orderer about counter offer (include note preview in notification)
         $picker = User::find($pickerId);
         if ($picker) {
             $this->orderNotificationService->notifyOrdererCounterOfferReceived(
                 $orderId,
                 $counterOffer->id,
                 $offerAmount,
-                $picker->full_name
+                $picker->full_name,
+                $note
             );
         }
 

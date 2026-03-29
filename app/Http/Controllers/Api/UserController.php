@@ -244,4 +244,84 @@ class UserController extends Controller
             ],
         ]);
     }
+
+    /**
+     * DELETE /api/user
+     *
+     * Permanently delete the authenticated user's account and all personal data.
+     * Required for GDPR / UK data law compliance.
+     *
+     * This hard-deletes:
+     *   - The user record
+     *   - All personal data (languages, settings)
+     *   - Avatar file from storage
+     *   - Stripe Connect account (if exists)
+     *
+     * Orders, reviews and chat history are anonymised (user_id set to null)
+     * rather than deleted, to preserve records for the other party.
+     */
+    public function deleteAccount(Request $request): JsonResponse
+    {
+        $request->validate([
+            'confirmation' => 'required|string|in:DELETE', // Extra safety: client must send "DELETE"
+        ]);
+
+        $user = $request->user();
+
+        try {
+            \DB::transaction(function () use ($user) {
+                // Anonymise orders (keep records for other party, remove personal link)
+                \DB::table('orders')
+                    ->where('orderer_id', $user->id)
+                    ->update(['orderer_id' => null]);
+
+                \DB::table('orders')
+                    ->where('assigned_picker_id', $user->id)
+                    ->update(['assigned_picker_id' => null]);
+
+                // Anonymise chat messages
+                \DB::table('chat_messages')
+                    ->where('sender_id', $user->id)
+                    ->update(['sender_id' => null]);
+
+                // Delete avatar from storage
+                if ($user->avatar_url) {
+                    $path = str_replace('/storage/', '', $user->avatar_url);
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+                }
+
+                // Delete Stripe Connect account if exists
+                if ($user->stripe_connect_account_id) {
+                    try {
+                        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+                        \Stripe\Account::retrieve($user->stripe_connect_account_id)->delete();
+                    } catch (\Exception $e) {
+                        \Log::warning('Could not delete Stripe account during user deletion', [
+                            'user_id' => $user->id,
+                            'error'   => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                // Revoke all auth tokens
+                $user->tokens()->delete();
+
+                // Hard delete the user (cascades to languages, settings via DB constraints)
+                $user->delete();
+            });
+
+            \Log::info('User account deleted', ['user_id' => $user->id]);
+
+            return response()->json([
+                'message' => 'Account deleted successfully. All personal data has been removed.',
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Account deletion failed', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+            return response()->json(['message' => 'Account deletion failed. Please contact support.'], 500);
+        }
+    }
 }

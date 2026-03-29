@@ -427,4 +427,250 @@ class StripeController extends Controller
             \Log::error('Error handling refund: ' . $e->getMessage());
         }
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // STRIPE CONNECT — Bank onboarding for Jetbuyers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * GET /api/stripe/onboarding-link
+     *
+     * Generates a Stripe hosted onboarding URL for the Jetbuyer.
+     * The app opens this URL in a webview. Stripe handles KYC,
+     * bank account verification, and identity verification.
+     *
+     * On return from Stripe, the app calls /stripe/onboarding-status
+     * to check verification state.
+     */
+    public function createOnboardingLink(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $user = $request->user();
+
+            // Create a Stripe Express Connected Account if the user doesn't have one yet
+            if (!$user->stripe_connect_account_id) {
+                $account = \Stripe\Account::create([
+                    'type'    => 'express',
+                    'country' => $this->resolveStripeCountry($user->country),
+                    'email'   => $user->email,
+                    'capabilities' => [
+                        'transfers' => ['requested' => true],
+                        'card_payments' => ['requested' => false],
+                    ],
+                    'metadata' => [
+                        'jetpicks_user_id' => $user->id,
+                    ],
+                ]);
+
+                $user->update([
+                    'stripe_connect_account_id' => $account->id,
+                    'stripe_connect_status'     => 'pending',
+                ]);
+            }
+
+            // Create an Account Link (hosted onboarding URL)
+            $accountLink = \Stripe\AccountLink::create([
+                'account'     => $user->stripe_connect_account_id,
+                'refresh_url' => env('APP_URL') . '/api/stripe/onboarding-refresh',
+                'return_url'  => env('APP_URL') . '/api/stripe/onboarding-return',
+                'type'        => 'account_onboarding',
+            ]);
+
+            return response()->json([
+                'url'        => $accountLink->url,
+                'expires_at' => $accountLink->expires_at,
+            ]);
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            \Log::error('Stripe onboarding link failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Failed to generate onboarding link: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/stripe/onboarding-status
+     *
+     * Check the verification status of the user's Stripe Connect account.
+     * Called by the app after the user returns from Stripe onboarding webview.
+     */
+    public function getOnboardingStatus(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->stripe_connect_account_id) {
+            return response()->json([
+                'status'     => 'not_started',
+                'is_verified' => false,
+            ]);
+        }
+
+        try {
+            $account = \Stripe\Account::retrieve($user->stripe_connect_account_id);
+
+            $payoutsEnabled  = $account->payouts_enabled ?? false;
+            $detailsSubmitted = $account->details_submitted ?? false;
+            $status = $payoutsEnabled ? 'verified' : ($detailsSubmitted ? 'pending' : 'incomplete');
+
+            // Update local status
+            $user->update(['stripe_connect_status' => $status]);
+
+            // Get bank account details (masked)
+            $bankAccount = null;
+            if ($account->external_accounts && $account->external_accounts->total_count > 0) {
+                $ext = $account->external_accounts->data[0];
+                $bankAccount = [
+                    'bank_name'      => $ext->bank_name ?? null,
+                    'last4'          => $ext->last4 ?? null,
+                    'routing_number' => isset($ext->routing_number)
+                        ? '••-' . substr($ext->routing_number, -2)
+                        : null,
+                    'currency'       => $ext->currency ?? null,
+                    'country'        => $ext->country ?? null,
+                ];
+            }
+
+            return response()->json([
+                'status'           => $status,
+                'is_verified'      => $payoutsEnabled,
+                'details_submitted' => $detailsSubmitted,
+                'payouts_enabled'  => $payoutsEnabled,
+                'bank_account'     => $bankAccount,
+            ]);
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            \Log::error('Stripe account retrieve failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Could not retrieve account status'], 500);
+        }
+    }
+
+    /**
+     * POST /api/stripe/payouts
+     *
+     * Trigger a manual payout from the Jetbuyer's Stripe Connect account
+     * to their linked bank account. This is Option B (manual payouts).
+     *
+     * Body: { "amount_pence": 2500, "currency": "gbp" }
+     *       Leave amount empty to withdraw full available balance.
+     */
+    public function createPayout(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'amount_pence' => 'nullable|integer|min:100', // min £1.00
+            'currency'     => 'nullable|string|size:3',
+        ]);
+
+        $user = $request->user();
+
+        if (!$user->stripe_connect_account_id) {
+            return response()->json(['message' => 'Bank account not set up. Please complete bank verification first.'], 400);
+        }
+
+        if ($user->stripe_connect_status !== 'verified') {
+            return response()->json(['message' => 'Bank account not yet verified. Please complete the Stripe onboarding.'], 400);
+        }
+
+        try {
+            // Get available balance on the connected account
+            $balance = \Stripe\Balance::retrieve([], [
+                'stripe_account' => $user->stripe_connect_account_id,
+            ]);
+
+            $available = collect($balance->available)->firstWhere('currency', $request->input('currency', $user->wallet_currency ?? 'gbp'));
+            $availableAmount = $available['amount'] ?? 0;
+
+            if ($availableAmount <= 0) {
+                return response()->json(['message' => 'No funds available to withdraw.'], 400);
+            }
+
+            $payoutAmount = $request->input('amount_pence') ?? $availableAmount;
+
+            if ($payoutAmount > $availableAmount) {
+                return response()->json([
+                    'message'   => 'Requested amount exceeds available balance.',
+                    'available' => $availableAmount,
+                ], 400);
+            }
+
+            $payout = \Stripe\Payout::create([
+                'amount'   => $payoutAmount,
+                'currency' => $request->input('currency', $user->wallet_currency ?? 'gbp'),
+            ], [
+                'stripe_account' => $user->stripe_connect_account_id,
+            ]);
+
+            \Log::info('Stripe payout created', [
+                'user_id'       => $user->id,
+                'payout_id'     => $payout->id,
+                'amount_pence'  => $payoutAmount,
+            ]);
+
+            return response()->json([
+                'message'        => 'Payout initiated. Funds typically arrive within 1–2 business days.',
+                'payout_id'      => $payout->id,
+                'amount_pence'   => $payout->amount,
+                'currency'       => $payout->currency,
+                'arrival_date'   => date('Y-m-d', $payout->arrival_date),
+                'status'         => $payout->status,
+            ]);
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            \Log::error('Stripe payout failed', ['error' => $e->getMessage()]);
+            return response()->json(['message' => 'Payout failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET /api/stripe/wallet
+     * Get the Jetbuyer's current wallet balance from their Stripe Connect account.
+     */
+    public function getWalletBalance(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->stripe_connect_account_id || $user->stripe_connect_status !== 'verified') {
+            return response()->json([
+                'available_pence' => 0,
+                'pending_pence'   => 0,
+                'currency'        => $user->wallet_currency ?? 'gbp',
+                'is_verified'     => false,
+            ]);
+        }
+
+        try {
+            $balance  = \Stripe\Balance::retrieve([], ['stripe_account' => $user->stripe_connect_account_id]);
+            $currency = $user->wallet_currency ?? 'gbp';
+
+            $available = collect($balance->available)->firstWhere('currency', $currency);
+            $pending   = collect($balance->pending)->firstWhere('currency', $currency);
+
+            return response()->json([
+                'available_pence' => $available['amount'] ?? 0,
+                'pending_pence'   => $pending['amount'] ?? 0,
+                'currency'        => $currency,
+                'is_verified'     => true,
+            ]);
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            return response()->json(['message' => 'Could not retrieve balance'], 500);
+        }
+    }
+
+    /**
+     * Resolve country name to Stripe-compatible country code.
+     */
+    private function resolveStripeCountry(?string $country): string
+    {
+        $map = [
+            'United Kingdom' => 'GB',
+            'United States'  => 'US',
+            'Poland'         => 'PL',
+            'Italy'          => 'IT',
+            'France'         => 'FR',
+            'Germany'        => 'DE',
+            'Spain'          => 'ES',
+            'Romania'        => 'RO',
+            'Hungary'        => 'HU',
+        ];
+        return $map[$country] ?? 'GB';
+    }
 }

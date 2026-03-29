@@ -51,6 +51,7 @@ class ChatService
             return [
                 'id' => $room->id,
                 'order_id' => $room->order_id,
+                'payment_status' => $room->order?->payment_status ?? 'PENDING',
                 'other_user' => [
                     'id' => $otherUser->id,
                     'full_name' => $otherUser->full_name,

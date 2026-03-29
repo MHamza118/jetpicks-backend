@@ -21,6 +21,7 @@ class Offer extends Model
         'offer_amount',
         'parent_offer_id',
         'status',
+        'note', // Optional message from Jetbuyer explaining their counter offer
     ];
 
     protected $casts = [

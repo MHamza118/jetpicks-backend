@@ -23,6 +23,12 @@ class User extends Authenticatable
         'roles',
         'avatar_url',
         'is_active',
+        // Stripe Connect
+        'stripe_connect_account_id',
+        'stripe_connect_status',
+        'wallet_balance_pence',
+        'wallet_pending_pence',
+        'wallet_currency',
     ];
 
     protected $hidden = [
