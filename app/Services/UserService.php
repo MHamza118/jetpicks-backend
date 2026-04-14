@@ -21,6 +21,8 @@ class UserService
             'country' => $user->country,
             'roles' => $user->roles,
             'avatar_url' => $user->avatar_url,
+            'stripe_connect_account_id' => $user->stripe_connect_account_id,
+            'stripe_connect_status' => $user->stripe_connect_status,
             'languages' => $user->languages->map(fn($lang) => [
                 'id' => $lang->id,
                 'language_name' => $lang->language_name,

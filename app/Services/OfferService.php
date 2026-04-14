@@ -153,14 +153,24 @@ class OfferService
             ->update(['status' => 'SUPERSEDED']);
         \Log::info('Other pending offers marked as SUPERSEDED');
 
-        // For COUNTER offers, store the accepted amount separately
-        // Do NOT change order status or assign picker
+        // When ANY offer (INITIAL or COUNTER) is accepted, update order status and assign picker
+        \Log::info('Setting order to ACCEPTED and assigning picker', [
+            'picker_id' => $offer->offered_by_user_id,
+            'offer_type' => $offer->offer_type
+        ]);
+        
+        $order->update([
+            'status'              => 'ACCEPTED',
+            'assigned_picker_id'  => $offer->offered_by_user_id,
+            'accepted_at'         => now(),
+        ]);
+
+        // For COUNTER offers, also store the accepted amount
         if ($offer->offer_type === 'COUNTER') {
             \Log::info('Processing COUNTER offer', ['amount' => $offer->offer_amount]);
             
-            $order->accepted_counter_offer_amount = $offer->offer_amount;
-            $order->save();
-            \Log::info('Order saved with accepted_counter_offer_amount', ['value' => $order->accepted_counter_offer_amount]);
+            $order->update(['accepted_counter_offer_amount' => $offer->offer_amount]);
+            \Log::info('Order updated with accepted_counter_offer_amount', ['value' => $offer->offer_amount]);
 
             // Notify picker about counter offer acceptance
             $orderer = $order->orderer;
@@ -181,7 +191,7 @@ class OfferService
         
         // Refresh order to get latest data from database
         $order = $order->fresh();
-        \Log::info('Order refreshed', ['accepted_counter_offer_amount' => $order->accepted_counter_offer_amount]);
+        \Log::info('Order refreshed', ['status' => $order->status, 'assigned_picker_id' => $order->assigned_picker_id]);
         
         return [
             'offer' => $offer,

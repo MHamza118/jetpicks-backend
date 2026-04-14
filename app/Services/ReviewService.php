@@ -27,10 +27,19 @@ class ReviewService
             throw new \Exception('Rating must be between 1 and 5');
         }
 
-        if (Review::where('order_id', $order->id)
+        $existingReview = Review::where('order_id', $order->id)
             ->where('reviewer_id', $reviewerId)
-            ->exists()) {
-            throw new \Exception('You already reviewed this order');
+            ->first();
+
+        // Treat repeat submit as edit: update existing review instead of failing.
+        if ($existingReview) {
+            $existingReview->update([
+                'reviewee_id' => $revieweeId,
+                'rating' => $rating,
+                'comment' => $comment,
+            ]);
+
+            return $existingReview->fresh();
         }
 
         return Review::create([

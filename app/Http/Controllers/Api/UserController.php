@@ -293,7 +293,7 @@ class UserController extends Controller
                 // Delete Stripe Connect account if exists
                 if ($user->stripe_connect_account_id) {
                     try {
-                        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET'));
+                        \Stripe\Stripe::setApiKey(env('STRIPE_SECRET_KEY', env('STRIPE_SECRET')));
                         \Stripe\Account::retrieve($user->stripe_connect_account_id)->delete();
                     } catch (\Exception $e) {
                         \Log::warning('Could not delete Stripe account during user deletion', [

@@ -51,12 +51,19 @@ class LocationController extends Controller
         }
 
         try {
-            $response = Http::post(self::CITIES_NOW_API, [
+            $response = Http::timeout(10)->post(self::CITIES_NOW_API, [
                 'country' => $countryName,
             ]);
 
             if (!$response->successful()) {
-                return response()->json(['error' => 'Failed to fetch cities'], 500);
+                \Log::warning('CountriesNow city lookup failed', [
+                    'country' => $countryName,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                // Fail gracefully so journey setup can continue with manual/Any City selection.
+                return response()->json(['data' => []]);
             }
 
             $data = $response->json();
@@ -69,7 +76,13 @@ class LocationController extends Controller
 
             return response()->json(['data' => $cities]);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to fetch cities'], 500);
+            \Log::warning('CountriesNow city lookup exception', [
+                'country' => $countryName,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Fail gracefully instead of returning 500.
+            return response()->json(['data' => []]);
         }
     }
 }

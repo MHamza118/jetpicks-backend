@@ -1,0 +1,7 @@
+
+Warning: require(C:\Users\Home\Downloads\jetpicks\jetpicks_backend_complete/vendor/autoload.php): Failed to open stream: No such file or directory in C:\Users\Home\Downloads\jetpicks\jetpicks_backend_complete\artisan on line 10
+
+Fatal error: Uncaught Error: Failed opening required 'C:\Users\Home\Downloads\jetpicks\jetpicks_backend_complete/vendor/autoload.php' (include_path='C:\xampp\php\PEAR') in C:\Users\Home\Downloads\jetpicks\jetpicks_backend_complete\artisan:10
+Stack trace:
+#0 {main}
+  thrown in C:\Users\Home\Downloads\jetpicks\jetpicks_backend_complete\artisan on line 10

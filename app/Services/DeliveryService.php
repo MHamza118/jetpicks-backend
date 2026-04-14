@@ -108,14 +108,19 @@ class DeliveryService
     public function confirmDelivery(Order $order, $userId): Order
     {
         if ($order->orderer_id !== $userId) {
-            throw new \Exception('Only the Jetpicker can confirm delivery');
+            throw new \Exception('Only the buyer who created this order can confirm delivery');
         }
 
-        if (!in_array($order->status, ['ACCEPTED', 'DELIVERED'])) {
-            throw new \Exception('Order must be ACCEPTED or DELIVERED to confirm');
+        // Idempotent behavior: if already confirmed/completed, return success.
+        if ($order->status === 'COMPLETED' || $order->delivery_confirmed_at) {
+            return $order->fresh();
         }
 
-        if ($order->status === 'ACCEPTED' && $order->payment_status !== 'PAID') {
+        if ($order->status !== 'DELIVERED') {
+            throw new \Exception('Order must be DELIVERED before the buyer can confirm delivery');
+        }
+
+        if ($order->payment_status !== 'PAID') {
             throw new \Exception('Payment must be completed before confirming delivery');
         }
 
@@ -132,7 +137,7 @@ class DeliveryService
     public function reportIssue(Order $order, $userId): Order
     {
         if ($order->orderer_id !== $userId) {
-            throw new \Exception('Only the Jetpicker can report an issue');
+            throw new \Exception('Only the buyer who created this order can report an issue');
         }
 
         if (!in_array($order->status, ['ACCEPTED', 'DELIVERED'])) {

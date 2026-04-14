@@ -14,7 +14,7 @@ class StripeController extends Controller
 {
     public function __construct()
     {
-        Stripe::setApiKey(env('STRIPE_SECRET'));
+        Stripe::setApiKey(env('STRIPE_SECRET_KEY', env('STRIPE_SECRET')));
     }
 
     /**
@@ -26,12 +26,12 @@ class StripeController extends Controller
     public function createPaymentIntent(Request $request)
     {
         // make sure we at least have a Stripe secret configured, otherwise the SDK will explode
-        if (empty(env('STRIPE_SECRET'))) {
-            \Log::error('StripeController::createPaymentIntent called without STRIPE_SECRET');
+        if (empty(env('STRIPE_SECRET_KEY', env('STRIPE_SECRET')))) {
+            \Log::error('StripeController::createPaymentIntent called without STRIPE_SECRET_KEY');
             return response()->json([
                 'success' => false,
                 'error' => 'Stripe configuration error',
-                'message' => 'STRIPE_SECRET is not set on the backend.',
+                'message' => 'STRIPE_SECRET_KEY is not set on the backend.',
             ], 500);
         }
 
@@ -320,10 +320,10 @@ class StripeController extends Controller
             );
         } catch (\UnexpectedValueException $e) {
             // Invalid payload
-            return response('', 400);
+            return response()->json([], 400);
         } catch (\Stripe\Exception\SignatureVerificationException $e) {
             // Invalid signature
-            return response('', 400);
+            return response()->json([], 400);
         }
 
         // Handle the event
@@ -446,33 +446,79 @@ class StripeController extends Controller
     {
         try {
             $user = $request->user();
+            $desiredCountry = $this->resolveStripeCountry($user->country);
+            $account = null;
 
             // Create a Stripe Express Connected Account if the user doesn't have one yet
             if (!$user->stripe_connect_account_id) {
-                $account = \Stripe\Account::create([
-                    'type'    => 'express',
-                    'country' => $this->resolveStripeCountry($user->country),
-                    'email'   => $user->email,
-                    'capabilities' => [
-                        'transfers' => ['requested' => true],
-                        'card_payments' => ['requested' => false],
-                    ],
-                    'metadata' => [
-                        'jetpicks_user_id' => $user->id,
-                    ],
-                ]);
+                $account = $this->createExpressConnectedAccount($user->email, $desiredCountry, $user->id);
 
                 $user->update([
                     'stripe_connect_account_id' => $account->id,
                     'stripe_connect_status'     => 'pending',
                 ]);
+            } else {
+                // If user changed profile country after first onboarding, Stripe keeps the original account country.
+                // In that case create a fresh connected account in the requested country.
+                try {
+                    $connectedAccount = \Stripe\Account::retrieve($user->stripe_connect_account_id);
+                    $existingCountry = strtoupper((string) ($connectedAccount->country ?? ''));
+
+                    if ($existingCountry !== $desiredCountry) {
+                        \Log::info('Recreating Stripe connected account due to country mismatch', [
+                            'user_id' => $user->id,
+                            'old_account_id' => $user->stripe_connect_account_id,
+                            'old_country' => $existingCountry,
+                            'new_country' => $desiredCountry,
+                        ]);
+
+                        $account = $this->createExpressConnectedAccount($user->email, $desiredCountry, $user->id);
+
+                        $user->update([
+                            'stripe_connect_account_id' => $account->id,
+                            'stripe_connect_status'     => 'pending',
+                        ]);
+                    }
+                } catch (\Stripe\Exception\ApiErrorException $e) {
+                    $errorMessage = $e->getMessage();
+
+                    if (str_contains($errorMessage, 'does not have access to account') || str_contains($errorMessage, 'does not exist')) {
+                        \Log::warning('Recreating Stripe connected account because existing account is inaccessible', [
+                            'user_id' => $user->id,
+                            'old_account_id' => $user->stripe_connect_account_id,
+                            'error' => $errorMessage,
+                        ]);
+
+                        $account = $this->createExpressConnectedAccount($user->email, $desiredCountry, $user->id);
+
+                        $user->update([
+                            'stripe_connect_account_id' => $account->id,
+                            'stripe_connect_status'     => 'pending',
+                        ]);
+                    } else {
+                        throw $e;
+                    }
+                }
+
+                if (!$account && empty($user->stripe_connect_account_id)) {
+                    $account = $this->createExpressConnectedAccount($user->email, $desiredCountry, $user->id);
+
+                    $user->update([
+                        'stripe_connect_account_id' => $account->id,
+                        'stripe_connect_status'     => 'pending',
+                    ]);
+                }
             }
 
             // Create an Account Link (hosted onboarding URL)
+            $frontendBase = rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/');
+
             $accountLink = \Stripe\AccountLink::create([
                 'account'     => $user->stripe_connect_account_id,
-                'refresh_url' => env('APP_URL') . '/api/stripe/onboarding-refresh',
-                'return_url'  => env('APP_URL') . '/api/stripe/onboarding-return',
+                // Send the picker back to an existing frontend page.
+                // The page can call /api/stripe/onboarding-status to refresh account state.
+                'refresh_url' => $frontendBase . '/picker/profile/payout?stripe_onboarding=refresh',
+                'return_url'  => $frontendBase . '/picker/profile/payout?stripe_onboarding=return',
                 'type'        => 'account_onboarding',
             ]);
 
@@ -483,7 +529,21 @@ class StripeController extends Controller
 
         } catch (\Stripe\Exception\ApiErrorException $e) {
             \Log::error('Stripe onboarding link failed', ['error' => $e->getMessage()]);
-            return response()->json(['message' => 'Failed to generate onboarding link: ' . $e->getMessage()], 500);
+
+            $errorMessage = $e->getMessage();
+            if (str_contains($errorMessage, 'does not have access to account') || str_contains($errorMessage, 'does not exist')) {
+                return response()->json([
+                    'message' => 'The stored Stripe connected account is no longer valid for this Stripe secret. Clear the picker Stripe account and try onboarding again.',
+                ], 409);
+            }
+
+            if (str_contains($errorMessage, "signed up for Connect")) {
+                return response()->json([
+                    'message' => 'Stripe Connect is not enabled on this Stripe account yet. Open https://dashboard.stripe.com/connect and complete Connect setup, then try again.',
+                ], 400);
+            }
+
+            return response()->json(['message' => 'Failed to generate onboarding link: ' . $errorMessage], 500);
         }
     }
 
@@ -571,7 +631,7 @@ class StripeController extends Controller
 
         try {
             // Get available balance on the connected account
-            $balance = \Stripe\Balance::retrieve([], [
+            $balance = \Stripe\Balance::retrieve([
                 'stripe_account' => $user->stripe_connect_account_id,
             ]);
 
@@ -637,7 +697,7 @@ class StripeController extends Controller
         }
 
         try {
-            $balance  = \Stripe\Balance::retrieve([], ['stripe_account' => $user->stripe_connect_account_id]);
+            $balance  = \Stripe\Balance::retrieve(['stripe_account' => $user->stripe_connect_account_id]);
             $currency = $user->wallet_currency ?? 'gbp';
 
             $available = collect($balance->available)->firstWhere('currency', $currency);
@@ -660,17 +720,50 @@ class StripeController extends Controller
      */
     private function resolveStripeCountry(?string $country): string
     {
+        $normalized = strtoupper(trim((string) $country));
+
+        if ($normalized === '') {
+            return 'GB';
+        }
+
+        $directCodes = ['AU', 'GB', 'US', 'PL', 'IT', 'FR', 'DE', 'ES', 'RO', 'HU'];
+        if (in_array($normalized, $directCodes, true)) {
+            return $normalized;
+        }
+
         $map = [
-            'United Kingdom' => 'GB',
-            'United States'  => 'US',
-            'Poland'         => 'PL',
-            'Italy'          => 'IT',
-            'France'         => 'FR',
-            'Germany'        => 'DE',
-            'Spain'          => 'ES',
-            'Romania'        => 'RO',
-            'Hungary'        => 'HU',
+            'UNITED KINGDOM' => 'GB',
+            'UK'             => 'GB',
+            'GREAT BRITAIN'  => 'GB',
+            'ENGLAND'        => 'GB',
+            'AUSTRALIA'      => 'AU',
+            'UNITED STATES'  => 'US',
+            'USA'            => 'US',
+            'POLAND'         => 'PL',
+            'ITALY'          => 'IT',
+            'FRANCE'         => 'FR',
+            'GERMANY'        => 'DE',
+            'SPAIN'          => 'ES',
+            'ROMANIA'        => 'RO',
+            'HUNGARY'        => 'HU',
         ];
-        return $map[$country] ?? 'GB';
+
+        return $map[$normalized] ?? 'GB';
+    }
+
+    private function createExpressConnectedAccount(string $email, string $country, string $userId)
+    {
+        return \Stripe\Account::create([
+            'type'    => 'express',
+            'country' => $country,
+            'email'   => $email,
+            'capabilities' => [
+                'transfers' => ['requested' => true],
+                'card_payments' => ['requested' => true],
+            ],
+            'metadata' => [
+                'jetpicks_user_id' => $userId,
+            ],
+        ]);
     }
 }
